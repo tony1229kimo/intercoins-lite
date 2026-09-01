@@ -13,6 +13,7 @@ import { ensureSchema, hasDb, query } from "./db.js";
 import { seedPrizes } from "./prizes.js";
 import { verifyPushToken } from "./lib/line.js";
 import { TASKS, PUBLISHED_TASKS, MAX_EARNABLE } from "./lib/tasks.js";
+import { adminUsers } from "./middleware/adminAuth.js";
 import gameRoutes from "./routes/game.js";
 import claimRoutes from "./routes/claim.js";
 import adminRoutes from "./routes/admin.js";
@@ -48,6 +49,9 @@ app.get("/api/health", async (req, res) => {
     line_channel_id_configured: Boolean(process.env.LINE_CHANNEL_ID),
     line_push_token_configured: Boolean(process.env.LINE_MESSAGING_ACCESS_TOKEN_KH),
     admin_token_configured: Boolean(process.env.ADMIN_TOKEN),
+    // 只回「有幾個後台帳號」，不回帳號名稱也不回密碼 —— 用來確認 ADMIN_USERS
+    // 真的被容器讀到了（設了環境變數沒重新部署是最常見的假上線）。
+    admin_users_configured: adminUsers().length,
     public_base_url: process.env.PUBLIC_BASE_URL || null,
     time: new Date().toISOString(),
   };
