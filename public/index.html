@@ -1015,7 +1015,7 @@ async function checkFriendAndLoad(){
   if(friendPoll){ clearInterval(friendPoll); friendPoll=null; }
   await refreshState();
   hideOverlay();
-  // 上次中了臺北的獎卻沒留聯絡資訊 → 進來就補問（不然我們聯繫不上他）。
+  // 上次中了 contact 類的獎卻沒留聯絡資訊 → 進來就補問（不然我們聯繫不上他）。
   if(PENDING_CONTACTS.length) setTimeout(promptPendingContact, 1200);
   return true;
 }
@@ -1330,7 +1330,8 @@ function showWin(r){
     openModal($('#modal'));
     return;
   }
-  // 臺北的獎：細則未定案，不發連結，直接跳「留聯絡資訊」表單（Tony 2026-09-01）。
+  // claim_mode='contact' 的獎：不發連結，直接跳「留聯絡資訊」表單。
+  // 臺北全部（細則未定案）＋ 高雄的兩項住宿大獎（要排入住日期）—— Tony 2026-09-01。
   if(!coin && r.claimMode==='contact'){
     PENDING_CONTACTS=[{drawId:r.drawId, prize:r.prize, tier:r.tier, code:r.code, hotel:r.hotel}];
     openContactForm(PENDING_CONTACTS[0]);

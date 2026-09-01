@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS prizes (
   name            TEXT    NOT NULL,
   -- 領獎方式：
   --   coupon  = 推 Omnichat 券到 LINE，連結單次有效（高雄）
-  --   contact = 不觸發連結，跳表單收聯絡資訊，由飯店人員後續聯繫（臺北，細則未定案）
+  --   contact = 不觸發連結，跳表單收聯絡資訊，由該獎項所屬飯店的人後續聯繫
+  --             逐一獎項設定，不是依館別：臺北全部 ＋ 高雄的 kh-5-1 / kh-5-2
   claim_mode      TEXT    NOT NULL DEFAULT 'coupon',
   coupon_link     TEXT,                      -- Omnichat OMO bind URL；NULL = 虛擬獎（洲遊幣）
   coin_reward     INTEGER NOT NULL DEFAULT 0,
@@ -137,8 +138,9 @@ CREATE INDEX IF NOT EXISTS coin_ledger_user_idx ON coin_ledger (line_user_id, cr
 
 -- 中獎聯絡資訊（claim_mode='contact' 的獎項專用）
 --
--- 臺北洲際的兌換細則還沒定案，所以中臺北的獎不發 Omnichat 券，
--- 改請中獎者留下聯絡方式，由臺北洲際的人後續以信件聯繫。
+-- 這類獎項不發 Omnichat 券，改請中獎者留下聯絡方式，
+-- 由該獎項所屬飯店（prizes.hotel）的人後續主動聯繫。
+-- 臺北是細則未定案且沒有 OA token；高雄的兩項住宿大獎是要排入住日期與房型。
 -- 一筆中獎紀錄只會有一筆聯絡資訊（draw_id 當 PK），重填會覆蓋。
 CREATE TABLE IF NOT EXISTS prize_contacts (
   draw_id        BIGINT      PRIMARY KEY REFERENCES draws(id) ON DELETE CASCADE,

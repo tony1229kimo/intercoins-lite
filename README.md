@@ -5,15 +5,26 @@
 
 - **活動期間**：2026-09-01 ～ 2026-11-30
 - **正式網址**：https://intercoins.ictaiwan.net
-- **兩館獎項共用同一個轉盤**，差別在領獎方式：
+- **兩館獎項共用同一個轉盤**，差別在領獎方式。
+  ⚠️ `claim_mode` 是**逐一獎項**設定，不是依館別：
 
-| 館別 | `claim_mode` | 領獎方式 | 為什麼 |
-|---|---|---|---|
-| 高雄洲際 | `coupon` | Omnichat 券推到 LINE 聊天室，連結**單次有效** | 細則已定案，OA token 也在我們手上 |
-| 臺北洲際 | `contact` | **不觸發連結**，跳表單收姓名／手機／Email／方便聯繫時段，由專人以信件聯繫 | 兌換細則還沒定案（Excel 細則欄全寫「待酒店開幕後公告」），且臺北是**另一個 LINE OA**，我們沒有它的 token |
+| `claim_mode` | 領獎方式 | 適用獎項 |
+|---|---|---|
+| `coupon` | Omnichat 券推到 LINE 聊天室，連結**單次有效** | 高雄的 9 個獎項 |
+| `contact` | **不觸發連結**，跳表單收姓名／手機／Email／方便聯繫時段，由**該獎項所屬飯店**的人主動聯繫 | 臺北全部 6 個 ＋ 高雄的 2 項住宿大獎 |
 
-> 臺北細則定案、也拿到臺北 OA token 之後，把該獎項的 `claim_mode` 改成 `coupon`
-> 就自動改走發券流程 —— **程式完全不用動**。
+高雄走 `contact` 的兩項（Tony 2026-09-01 指定）：
+
+| id | 獎品 | 為什麼 |
+|---|---|---|
+| `kh-5-1` | 港灣海景開放式套房 住宿一晚（含雙人早餐） | 要安排入住日期與房型，不是拿張券到櫃檯就能換 |
+| `kh-5-2` | 豪華經典房 住宿一晚（含雙人早餐） | 同上 |
+
+臺北是全部 `contact`：兌換細則還沒定案（Excel 細則欄全寫「待酒店開幕後公告」），
+而且臺北是**另一個 LINE OA**，我們沒有它的 token，技術上也推不了券。
+
+> 設定在 `scripts/import-prizes.py` 的 `CONTACT_PRIZES`。
+> 要改回發券，把該 id 從集合拿掉重跑匯入即可 —— **程式完全不用動**。
 
 ## 🔐 這個 repo 為什麼必須保持 private
 
@@ -67,9 +78,9 @@ server/db.js          Postgres 連線池 + idempotent schema
 server/prizes.js      獎項匯入（prizes.json → DB）
 server/prizes.json    獎項資料 · 兩館共 20 筆（由 scripts/import-prizes.py 產生，勿手改）
 server/routes/game.js  /api/state /api/spin /api/tasks /api/profile /api/me/friendship
-                       /api/draws/:id/contact —— 臺北中獎者的聯絡資訊
+                       /api/draws/:id/contact —— contact 類中獎者的聯絡資訊
 server/routes/claim.js /api/claim/:token —— 單次有效的 Omnichat 轉址（高雄）
-server/routes/admin.js /api/admin/* —— 庫存、機率、中獎名單 CSV、臺北待聯繫名單、補推播
+server/routes/admin.js /api/admin/* —— 庫存、機率、中獎名單 CSV、待聯繫名單、補推播
 scripts/import-prizes.py  Excel → prizes.json（含機率分配與 claim_mode）
 ```
 
@@ -89,7 +100,8 @@ Flex 訊息裡的 `/api/claim/:token` 指到錯誤 host 而 404（POSTMORTEM Bug
 6. 投幣抽獎 → `POST /api/spin` → **後端**加權抽獎、扣庫存、扣幣、開票、推播
 7. 中獎後依該獎項的 `claim_mode` 分流：
    - **高雄（`coupon`）** → Flex 券推到聊天室，按鈕連到 `/api/claim/:token`（**單次有效**）
-   - **臺北（`contact`）** → 畫面跳表單收聯絡資訊 → `POST /api/draws/:id/contact`；
+   - **`contact` 類** → 畫面跳表單收聯絡資訊 → `POST /api/draws/:id/contact`；
+     表單標誌與飯店名稱依 `prizes.hotel` 切換；
      同時推一則提醒進聊天室。客人若關掉彈窗就跑了，下次進遊戲時
      `/api/state` 的 `pendingContacts` 會再問一次，直到填完為止
 
@@ -147,7 +159,8 @@ Messaging token 都能跟味蕾地圖共用，加好友檢查也共用同一個�
 python scripts/import-prizes.py "C:\Users\smtony\Downloads\獎項一覽表.xlsx"
 ```
 
-檢查印出的機率表沒問題（每個等級要剛好 100%，臺北要全部標 `★ 留聯絡資訊`），
+檢查印出的機率表沒問題（每個等級要剛好 100%，臺北 6 項與 `kh-5-1` / `kh-5-2`
+要標 `★ 留聯絡資訊`，共 8 項），
 然後 `git commit` + `git push`，Zeabur 重新部署即生效。
 **已發出的數量（`prizes.issued`）不會被重置。**
 
@@ -179,8 +192,8 @@ Excel 的機率欄已被行銷移除，權重改由 `scripts/import-prizes.py` �
 
 | 分頁 | 內容 |
 |---|---|
-| **臺北待聯繫** | 中了臺北獎項的人。可搜尋、可只看「未填聯絡資訊」的。臺北洲際的人照這份聯繫 |
-| **中獎名單** | **兩館共用一份**，可依館別／獎項類型篩選。高雄櫃檯查客人手上的券是不是自家發的、臺北的人查該聯繫誰，都在這裡。可下載 CSV |
+| **待聯繫名單** | 中了 `contact` 類獎項的人（臺北全部 ＋ 高雄兩項住宿大獎）。有「由誰聯繫」欄可依館別篩，各館認領自己的。可搜尋、可只看「未填聯絡資訊」的 |
+| **中獎名單** | **兩館共用一份**，可依館別／獎項類型篩選。櫃檯查客人手上的券是不是自家發的、各館查該聯繫誰，都在這裡。可下載 CSV |
 | **獎項與庫存** | 每個獎品的實際機率、名額、已發出、剩餘。哪一等級發完了一眼看得出來 |
 
 ### 誰能進去 —— 個人帳號，不是共用密碼
@@ -207,7 +220,7 @@ curl -X POST https://intercoins.ictaiwan.net/api/admin/login   -H "Content-Type:
 
 # 之後都帶 Authorization: Bearer <token>
 curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/winners    # 完整中獎名單
-curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/contacts   # 臺北待聯繫
+curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/contacts   # 待聯繫名單
 curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/prizes     # 獎項與庫存
 curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/stats      # 營運總覽
 curl -H "Authorization: Bearer $T" -O https://intercoins.ictaiwan.net/api/admin/winners.csv
@@ -246,8 +259,9 @@ curl -s https://intercoins.ictaiwan.net/api/health
 登入 → 加好友 gate → 做任務拿幣 → 抽獎 → 確認 LINE 收到 Flex 券 → 點領取 →
 **再點第二次應該顯示「此連結已使用過」**。
 
-**臺北的獎（contact）**
-抽到臺北獎項 → 應該**不出現領取連結**，改跳聯絡資訊表單 → 送出 →
+**`contact` 類的獎**
+抽到臺北任一獎項，或高雄的 `kh-5-1` / `kh-5-2` → 應該**不出現領取連結**，
+改跳聯絡資訊表單（標誌與飯店名稱要對得上該獎品所屬飯店）→ 送出 →
 `GET /api/admin/contacts` 要看得到這筆 → 關掉遊戲重開，**不應該再被問一次**。
 反過來，若刻意按 Esc 跳過表單，重開遊戲**應該要再問一次**。
 
