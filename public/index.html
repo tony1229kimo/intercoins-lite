@@ -346,7 +346,7 @@ img.li-av{background:none}
 @media (prefers-reduced-motion:reduce){ .tier-aura.show{animation:none} }
 /* 個資表單關閉鈕 */
 #profile-modal .card{position:relative;padding-top:34px}
-/* ── 臺北洲際酒店 標誌（中獎聯絡表單）──────────────────────────
+/* ── 飯店標誌（中獎聯絡表單）──────────────────────────────────
    emblem 是官方金色標誌，已預先合成到卡片底色 #F5F3EE（原檔白底會出現白框）。
    字標用襯線字 + 寬字距重現品牌鎖定形式，跟 IHG 品牌規範一致。 */
 .ct-brand{margin:-4px 0 18px}
@@ -644,19 +644,20 @@ img.li-av{background:none}
     </div>
   </div>
 
-  <!-- 中獎聯絡資訊（臺北獎項專用：細則未定案，不發券，由專人聯繫） -->
+  <!-- 中獎聯絡資訊（claim_mode='contact' 的獎項：不發券，由該館專人聯繫）
+       臺北全部 + 高雄的兩項住宿大獎走這條路；標誌與文案由 JS 依館別填入 -->
   <div class="modal" id="contact-modal" role="dialog" aria-modal="true" aria-label="填寫聯絡資訊">
     <div class="card">
-      <!-- 臺北洲際酒店 標誌：讓中獎者一眼看出這個獎是哪一家飯店提供的 -->
+      <!-- 飯店標誌：依中獎獎項所屬的飯店切換（IC 的「I」標誌兩館共用，差別在字標） -->
       <div class="ct-brand">
         <img src="assets/ic-emblem.webp" alt="" width="52" height="52" />
         <div class="ct-brand-name">I N T E R C O N T I N E N T A L</div>
-        <div class="ct-brand-sub">T A I P E I</div>
-        <div class="ct-brand-zh">臺北洲際酒店</div>
+        <div class="ct-brand-sub" id="ct-brand-city"></div>
+        <div class="ct-brand-zh" id="ct-brand-zh"></div>
       </div>
       <div class="win-lbl" role="heading" aria-level="2">恭喜中獎</div>
       <div class="prize" id="ct-prize" style="font-size:var(--t-lead);margin:var(--s2) 0 var(--s2)"></div>
-      <div class="ct-notice">臺北洲際酒店將於後續<b>直接與您進行獎項聯繫</b><br>請留下您的聯絡方式</div>
+      <div class="ct-notice" id="ct-notice"></div>
       <div class="code" id="ct-code" style="margin-bottom:var(--s4)"></div>
       <div class="pf-field"><label>姓名</label><input id="ct-name" type="text" placeholder="您的姓名"></div>
       <div class="pf-field"><label>手機</label><input id="ct-phone" type="tel" placeholder="09xx-xxx-xxx"></div>
@@ -847,8 +848,18 @@ async function refreshState(){ applyState(await api('/state')); }
    臺北洲際的兌換細則還沒定案 → 不發 Omnichat 券，改收聯絡方式由專人聯繫。
    客人有可能關掉彈窗就跑了，所以 /api/state 會回 pendingContacts，下次進來再問一次。 */
 let CONTACT_PREFILL=null, PENDING_CONTACTS=[], contactDrawId=null;
+/* 走「留聯絡資訊」的不只臺北 —— 高雄的兩項住宿大獎也是（住宿券要安排入住日期，
+   由飯店的人主動聯繫比較妥當）。所以標誌與文案都要依【獎項所屬飯店】切換。 */
+const HOTEL_BRAND = {
+  KH:  { city:'K A O H S I U N G', zh:'高雄洲際酒店' },
+  TPE: { city:'T A I P E I',       zh:'臺北洲際酒店' },
+};
 function openContactForm(draw){
   contactDrawId = draw.drawId;
+  const b = HOTEL_BRAND[draw.hotel] || HOTEL_BRAND.TPE;
+  $('#ct-brand-city').textContent = b.city;
+  $('#ct-brand-zh').textContent = b.zh;
+  $('#ct-notice').innerHTML = `${b.zh}將於後續<b>直接與您進行獎項聯繫</b><br>請留下您的聯絡方式`;
   $('#ct-prize').textContent = draw.prize;
   $('#ct-code').innerHTML = draw.code ? `兌換碼<b>${draw.code}</b>` : '';
   if(CONTACT_PREFILL){                        // 填過個人資料就帶入，不用重打
@@ -1321,7 +1332,7 @@ function showWin(r){
   }
   // 臺北的獎：細則未定案，不發連結，直接跳「留聯絡資訊」表單（Tony 2026-09-01）。
   if(!coin && r.claimMode==='contact'){
-    PENDING_CONTACTS=[{drawId:r.drawId, prize:r.prize, tier:r.tier, code:r.code}];
+    PENDING_CONTACTS=[{drawId:r.drawId, prize:r.prize, tier:r.tier, code:r.code, hotel:r.hotel}];
     openContactForm(PENDING_CONTACTS[0]);
     return;
   }
@@ -1536,6 +1547,7 @@ $('#ct-submit').addEventListener('click',()=>{
   if(!/^09\d{8}$/.test(phone)){ toast('手機格式：09 開頭共 10 碼'); $('#ct-phone').focus(); return; }
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('請確認 Email 格式'); $('#ct-email').focus(); return; }
   if(contactDrawId==null){ toast('找不到中獎紀錄，請重新整理'); return; }
+  const sentHotel = (PENDING_CONTACTS.find(d=>d.drawId===contactDrawId)||{}).hotel;
 
   const btn=$('#ct-submit'); if(btn.disabled) return;     // 連點保護
   btn.disabled=true; const label=btn.textContent; btn.textContent='送出中…';
@@ -1545,7 +1557,8 @@ $('#ct-submit').addEventListener('click',()=>{
       $('#contact-modal').classList.remove('show');
       PENDING_CONTACTS = PENDING_CONTACTS.filter(d=>d.drawId!==contactDrawId);
       contactDrawId=null;
-      showReward('已收到你的聯絡資訊<b>臺北洲際酒店將盡快與你聯繫</b>');
+      const bz=(HOTEL_BRAND[sentHotel]||HOTEL_BRAND.TPE).zh;
+      showReward(`已收到你的聯絡資訊<b>${bz}將盡快與你聯繫</b>`);
       if(PENDING_CONTACTS.length) setTimeout(promptPendingContact, 2800);   // 還有其他筆就接著問
     })
     .catch(e=>{ toast('送出失敗，請再試一次'); console.error('[contact]', e); })

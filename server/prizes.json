@@ -210,7 +210,7 @@
   {
     "id": "kh-5-1",
     "hotel": "KH",
-    "claim_mode": "coupon",
+    "claim_mode": "contact",
     "tier": 5,
     "slot": 1,
     "name": "高雄洲際酒店 港灣海景開放式套房 住宿一晚（含雙人早餐）",
@@ -226,7 +226,7 @@
   {
     "id": "kh-5-2",
     "hotel": "KH",
-    "claim_mode": "coupon",
+    "claim_mode": "contact",
     "tier": 5,
     "slot": 2,
     "name": "高雄洲際酒店 豪華經典房 住宿一晚（含雙人早餐）",

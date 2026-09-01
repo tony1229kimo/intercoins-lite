@@ -81,7 +81,7 @@ router.get("/state", liffAuth, async (req, res) => {
       ),
       // 中了臺北的獎但還沒留聯絡資訊 —— 客人關掉彈窗就跑掉的話，下次進來要再提醒。
       query(
-        `SELECT d.id, d.prize_name, d.tier, d.code
+        `SELECT d.id, d.prize_name, d.tier, d.code, d.hotel
            FROM draws d
            JOIN prizes p ON p.id = d.prize_id
       LEFT JOIN prize_contacts c ON c.draw_id = d.id
@@ -131,9 +131,11 @@ router.get("/state", liffAuth, async (req, res) => {
       prize: w.prize_name, tier: w.tier, code: w.code,
       coin: w.coin_reward, at: w.created_at,
     })),
-    // 還沒補聯絡資訊的臺北中獎紀錄，前端會再跳一次表單。
+    // 還沒補聯絡資訊的中獎紀錄，前端會再跳一次表單。
+    // 帶 hotel 是因為表單要顯示【該獎項所屬飯店】的標誌與名稱 ——
+    // 高雄的兩項住宿大獎也走這條路（Tony 2026-09-01）。
     pendingContacts: pending.map((d) => ({
-      drawId: d.id, prize: d.prize_name, tier: d.tier, code: d.code,
+      drawId: d.id, prize: d.prize_name, tier: d.tier, code: d.code, hotel: d.hotel,
     })),
     // 已填過個人資料就幫客人帶入，不用重打一次。
     contactPrefill: profile[0] ?? null,

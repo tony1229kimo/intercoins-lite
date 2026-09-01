@@ -71,13 +71,20 @@ export async function checkFriendship(hotel, userId) {
 }
 
 /**
- * 推播「請留聯絡資訊」提醒（臺北獎項專用）。
+ * 推播「請留聯絡資訊」提醒（claim_mode = 'contact' 的獎項）。
  *
- * 臺北洲際的兌換細則還沒定案，中臺北的獎不發 Omnichat 券，改由飯店人員後續聯繫。
+ * 哪些獎走這條路：
+ *   臺北全部 —— 兌換細則還沒定案，而且臺北是另一個 OA，我們推不了券
+ *   高雄的兩項住宿大獎 —— 住宿券要安排入住日期，由飯店的人主動聯繫比較妥當
+ *
  * 客人有可能抽完就關掉彈窗跑了，所以推一則提醒進聊天室，按鈕帶他回遊戲補填。
- * （走的是高雄的 OA —— 客人是從那裡進來的，我們也只有高雄的 token。）
+ *
+ * ⚠️ hotel 是「用哪個 OA 推播」（永遠是 KH，客人從那裡進來的），
+ *    prizeHotel 是「這個獎是哪一家的」（訊息內文要講對）—— 兩者不一定相同。
  */
-export async function pushContactReminder(hotel, userId, { prizeName, code, tierLabel }) {
+const HOTEL_ZH = { KH: "高雄洲際酒店", TPE: "臺北洲際酒店" };
+
+export async function pushContactReminder(hotel, userId, { prizeName, code, tierLabel, prizeHotel }) {
   const token = tokenFor(hotel);
   if (!token) return { ok: false, reason: `LINE_MESSAGING_ACCESS_TOKEN_${hotel} 未設定` };
 
@@ -105,7 +112,9 @@ export async function pushContactReminder(hotel, userId, { prizeName, code, tier
         { type: "text", text: code ? `兌換碼 ${code}` : "", size: "sm", color: "#686869", margin: "md" },
         {
           type: "text", size: "sm", color: BRAND_INK, wrap: true, margin: "md",
-          text: "本獎項由臺北洲際酒店提供，兌換方式將由專人與您聯繫。\n請點下方按鈕留下聯絡資訊，我們會盡快與您聯絡。",
+          // 獎項所屬飯店 ≠ 推播用的 OA —— 高雄的住宿大獎也走這條路，不能寫死臺北。
+          text: `本獎項由${HOTEL_ZH[prizeHotel] || "本酒店"}提供，兌換方式將由專人與您聯繫。\n`
+              + "請點下方按鈕留下聯絡資訊，我們會盡快與您聯絡。",
         },
       ],
     },

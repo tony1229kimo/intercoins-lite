@@ -31,13 +31,26 @@ TIER_BY_LEVEL = {"I": 5, "II": 3, "III": 1}   # 一等獎投 5 / 二等獎投 3 
 TIER_LABEL = {5: "一等獎", 3: "二等獎", 1: "三等獎"}
 
 # ── 領獎方式（Tony 2026-09-01）────────────────────────────────
-#   KH  → coupon ：中獎直接把 Omnichat 券推到 LINE 聊天室，連結單次有效
-#   TPE → contact：臺北洲際的兌換細則還沒定案，所以【不觸發連結】，
-#                  改跳表單請中獎者留姓名 / 手機 / Email / 方便聯繫時段，
-#                  由臺北洲際的人後續以信件聯繫。
-#   Excel 裡臺北其實也有 Omnichat 連結，照樣存進 DB 但不使用；
-#   等細則定案，把該獎項的 claim_mode 改成 coupon 就自動改走發券流程，程式不用動。
-CLAIM_MODE = {"KH": "coupon", "TPE": "contact"}
+#   coupon ：中獎直接把 Omnichat 券推到 LINE 聊天室，連結單次有效
+#   contact：【不觸發連結】，改跳表單請中獎者留姓名 / 手機 / Email / 方便聯繫時段，
+#            由該館的人後續主動聯繫。
+#
+# 規則：
+#   臺北全部 contact —— 兌換細則還沒定案，而且臺北是另一個 LINE OA，我們推不了券。
+#   高雄預設 coupon，但下面 CONTACT_PRIZES 列出的例外也走 contact。
+#
+# 為什麼高雄的住宿大獎要例外（Tony 2026-09-01）：
+#   住宿券需要安排入住日期、房型與早餐，不是拿張券到櫃檯就能換，
+#   由飯店的人主動聯繫安排比較妥當。
+#
+# ⚠️ 這些獎項在 Excel 裡照樣有 Omnichat 連結，我們照樣存進 DB 但【不使用】；
+#    日後要改回發券，把該 id 從 CONTACT_PRIZES 拿掉重跑匯入即可，程式不用動。
+DEFAULT_CLAIM_MODE = {"KH": "coupon", "TPE": "contact"}
+
+CONTACT_PRIZES = {
+    "kh-5-1",   # 高雄 港灣海景開放式套房 住宿一晚（含雙人早餐）
+    "kh-5-2",   # 高雄 豪華經典房 住宿一晚（含雙人早餐）
+}
 
 # ── 中獎權重（Tony 2026-09-01）─────────────────────────────────
 # Excel 已無機率欄。規則：
@@ -98,10 +111,12 @@ def read_prizes(rows):
             coin = COIN_RE.search(name)
             threshold = cell(row[col["threshold"]])
             slot = int(row[col["slot"]])
+            prize_id = f"{hotel.lower()}-{TIER_BY_LEVEL[level]}-{slot}"
             prizes.append({
-                "id": f"{hotel.lower()}-{TIER_BY_LEVEL[level]}-{slot}",
+                "id": prize_id,
                 "hotel": hotel,
-                "claim_mode": CLAIM_MODE[hotel],
+                "claim_mode": ("contact" if prize_id in CONTACT_PRIZES
+                               else DEFAULT_CLAIM_MODE[hotel]),
                 "tier": TIER_BY_LEVEL[level],
                 "slot": slot,
                 "name": name,
@@ -168,9 +183,13 @@ def report(prizes):
         print(f"   → 實體獎中獎率 {sum(p['weight'] for p in physical):g}%\n")
     print(f"實體獎總庫存：{physical_total} 份")
 
-    stray = [p["id"] for p in prizes if p["hotel"] == "TPE" and p["claim_mode"] != "contact"]
-    if stray:
-        print(f"⚠️ 有臺北獎項不是 contact 模式：{stray}")
+    contact = [p for p in prizes if p["claim_mode"] == "contact" and not p["coin_reward"]]
+    print(f"\n★ 走「留聯絡資訊」的獎項共 {len(contact)} 個：")
+    for p in contact:
+        print(f"   [{p['hotel']:<3}] {p['name']}")
+    missing = CONTACT_PRIZES - {p["id"] for p in prizes}
+    if missing:
+        print(f"⚠️ CONTACT_PRIZES 裡有 id 在 Excel 中找不到：{sorted(missing)}")
 
 
 def main():
