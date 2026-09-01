@@ -974,6 +974,31 @@ const OV_BTN='display:block;width:100%;margin-top:16px;padding:14px;border-radiu
   +'background:linear-gradient(180deg,#f6d989,#dca948);color:#5a3a08;font:600 15px/1 "Noto Serif TC",serif;'
   +'letter-spacing:2px;text-decoration:none;cursor:pointer';
 
+/* ---------- 在 LINE 外面開啟時的處理 ----------
+   LIFF 網址在手機上點下去會自動喚起 LINE App；桌機則會開 LINE 的網頁登入。 */
+const LIFF_URL = 'https://liff.line.me/' + LIFF_ID;
+const LIFF_REDIRECT_KEY = 'ic_liff_redirect_tried';
+function showOpenInLineScreen(){
+  overlay(
+    '<div style="font-size:38px;margin-bottom:12px">📱</div>'
+    +'<h2 style="font:600 20px/1.4 \'Noto Serif TC\',serif;letter-spacing:2px;margin-bottom:12px">'
+    +'請用 LINE 開啟</h2>'
+    +'<p style="font:400 14px/1.9 sans-serif;color:#CDBFA6">'
+    +'本活動需透過 LINE 參加，中獎的優惠券也會發送到您的 LINE 聊天室。</p>'
+    +'<a style="'+OV_BTN+'" href="'+LIFF_URL+'">用 LINE 開啟活動</a>'
+    +'<p style="margin-top:16px;font:400 12px/1.8 sans-serif;color:#9C8E77">'
+    +'手機請先安裝 LINE；電腦可用手機掃描活動 QR Code。</p>'
+    // 保留退路：真的要在瀏覽器玩（例如桌機測試）也走得通，不把人完全擋死。
+    +'<button id="ic-web-login" style="'+OV_BTN
+    +'background:transparent;border:1px solid #8C6A35;color:#E7D3A8;font-size:13px">'
+    +'仍要在瀏覽器登入</button>');
+  const btn=$('#ic-web-login');
+  if(btn) btn.addEventListener('click', ()=>{
+    overlay('<p style="font:400 15px/1.8 sans-serif;color:#CDBFA6">正在前往 LINE 登入…</p>');
+    liff.login({ redirectUri: location.href });
+  });
+}
+
 /* ---------- LIFF 登入 → 加好友檢查 → 載入遊戲狀態 ---------- */
 let friendPoll=null;
 async function checkFriendAndLoad(){
@@ -1033,6 +1058,25 @@ async function initLiff(){
   overlay('<p style="font:400 15px/1.8 sans-serif;color:#CDBFA6">正在連線 LINE…</p>');
   try{
     await liff.init({ liffId: LIFF_ID });
+
+    /* ── 不在 LINE 裡開的話，先想辦法把他丟進 LINE App ──────────────
+       客人直接點 intercoins.ictaiwan.net（例如從 IG 簡介、EDM 連過來）時，
+       原本會停在 LINE 的網頁登入頁，體驗很差也容易放棄。
+       導去 LIFF 網址 https://liff.line.me/<LIFF_ID> 的話，手機上會自動
+       喚起 LINE App 並在裡面開啟遊戲。
+
+       ⚠️ 只導一次，用 sessionStorage 記住 —— 沒裝 LINE 或用桌機的人會被
+          導回瀏覽器，沒有這個保險就會無限轉圈。 */
+    if(!liff.isInClient()){
+      if(!sessionStorage.getItem(LIFF_REDIRECT_KEY)){
+        sessionStorage.setItem(LIFF_REDIRECT_KEY, '1');
+        location.replace(LIFF_URL);
+        return;
+      }
+      // 導過了還在瀏覽器 → 沒裝 LINE、或桌機。給明確選項，不要把人擋死。
+      if(!liff.isLoggedIn()){ showOpenInLineScreen(); return; }
+    }
+
     if(!liff.isLoggedIn()){ liff.login({ redirectUri: location.href }); return; }  // 導向後整頁重載
 
     ID_TOKEN = liff.getIDToken();
