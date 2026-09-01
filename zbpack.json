@@ -1,0 +1,5 @@
+{
+  "build_command": "npm install --omit=dev",
+  "start_command": "node server/index.js",
+  "node_version": "22"
+}

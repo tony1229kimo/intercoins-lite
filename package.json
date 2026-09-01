@@ -1,0 +1,18 @@
+{
+  "name": "intercoins-lite",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "洲遊幣 Lite — 高雄洲際酒店中秋轉盤抽獎 LIFF 遊戲",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "migrate": "node server/migrate.js",
+    "optimize:assets": "node scripts/optimize-assets.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}
