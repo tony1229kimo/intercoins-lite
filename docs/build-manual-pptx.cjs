@@ -351,7 +351,7 @@ const th = (t) => ({ text: t, options: { bold: true, fill: { color: TINT }, colo
   const s = slide("九、管理後台帳號（限 Tony）",
     "Zeabur → intercoins-lite 專案 → intercoins-lite 服務 → 環境變數 → ADMIN_USERS");
   s.addShape(pptx.ShapeType.roundRect, { x: 0.55, y: 1.6, w: 8.9, h: 0.6, rectRadius: 0.05, fill: { color: CODE_BG } });
-  s.addText("ADMIN_USERS=tony:密碼A,alisha:密碼B,katniss:密碼C", {
+  s.addText("ADMIN_USERS=tony:密碼A,kh-mktg:密碼B,tpe-mktg:密碼C", {
     x: 0.75, y: 1.6, w: 8.5, h: 0.6, fontFace: MONO, fontSize: 13, color: INK, valign: "middle",
   });
   s.addText([

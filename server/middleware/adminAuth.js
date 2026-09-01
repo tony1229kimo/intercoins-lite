@@ -8,7 +8,7 @@
  *   - 每次查名單都留下是「誰」查的（admin_access_log）
  *
  * 環境變數：
- *   ADMIN_USERS = "tony:密碼A,alisha:密碼B,katniss:密碼C"
+ *   ADMIN_USERS = "tony:密碼A,kh-mktg:密碼B,tpe-mktg:密碼C"
  *     帳號不分大小寫；密碼區分大小寫；用逗號分隔多組。
  *     ⚠️ 密碼裡不能有逗號或冒號。
  *   ADMIN_TOKEN = 主金鑰，給 curl / 自動化用（會記成使用者 "master"）。

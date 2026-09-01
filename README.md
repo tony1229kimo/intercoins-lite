@@ -15,6 +15,34 @@
 > 臺北細則定案、也拿到臺北 OA token 之後，把該獎項的 `claim_mode` 改成 `coupon`
 > 就自動改走發券流程 —— **程式完全不用動**。
 
+## 🔐 這個 repo 為什麼必須保持 private
+
+`server/prizes.json` 裡有 **17 條 Omnichat 兌換連結**（`api.omnichat.ai/.../omo/bind/...`）。
+
+**這些連結是 stateless 的 —— 任何人拿到就能直接領券**，不需要登入、不需要中獎。
+（這正是味蕾旅遊地圖 POSTMORTEM Bug #9 的成因，我們是在應用層包一層單次
+`claim_token` 才擋住無限領取；但原始連結本身沒有任何保護。）
+
+所以：
+
+- ❌ **絕對不要把這個 repo 改成 public**
+- ❌ 不要把 `prizes.json` 貼進 issue、Slack、簡報或任何對外文件
+- ✅ Fork / clone 給別人之前，先確認對方有權限看到這些連結
+- ✅ 若連結曾外流，請行銷到 Omnichat 後台重新產生一組，再重跑匯入
+
+> 已確認：`tony1229kimo/intercoins-lite` 目前是 **PRIVATE**。
+
+### 其他脫敏處理
+
+- Excel 的「庫存歸屬部門 / 負責申請人」欄是**同事姓名**，程式從來沒用到 ——
+  **刻意不匯入**，`prizes.js` 也不再寫入，並用 `ALTER TABLE ... DROP COLUMN`
+  把已經寫進 production DB 的那些姓名刪掉。要查誰負責哪個獎品請看行銷的 Excel。
+- 中獎者的姓名 / 手機 / Email 只存在 Postgres，**不進 repo**；
+  後台調閱一律留稽核紀錄（`admin_access_log`）。
+- `.env` 未被追蹤（`.gitignore` 已擋），`.env.example` 內全是佔位值。
+
+---
+
 ## 這份專案的來源
 
 | 來源 | 用途 |
@@ -160,7 +188,7 @@ Excel 的機率欄已被行銷移除，權重改由 `scripts/import-prizes.py` �
 名單裡有中獎者的**姓名／手機／Email**，所以刻意不用一組共用密碼：
 
 ```
-ADMIN_USERS=tony:密碼A,alisha:密碼B,katniss:密碼C
+ADMIN_USERS=tony:密碼A,kh-mktg:密碼B,tpe-mktg:密碼C
 ```
 
 - 帳號不分大小寫，密碼區分；多組用逗號分隔。**密碼裡不能有逗號或冒號**

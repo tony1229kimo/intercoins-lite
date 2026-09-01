@@ -19,10 +19,11 @@ DEFAULT_SRC = Path.home() / "Downloads" / "獎項一覽表.xlsx"
 
 # 新版 Excel 18 欄：0-7 臺北 / 8-17 高雄。（舊版 20 欄含「機率」，行銷已移除。）
 # 臺北那半邊沒有「兌換期限 / 結帳 Code / 庫存歸屬部門」三欄。
+# 「庫存歸屬部門 / 負責申請人」是同事姓名，刻意不匯入（見下方 read_prizes）。
 KH = dict(level=8, slot=9, name=10, link=11, quota=12,
-          threshold=13, terms=14, expiry=15, code=16, owner=17)
+          threshold=13, terms=14, expiry=15)
 TPE = dict(level=0, slot=1, name=2, link=3, quota=4,
-           threshold=5, terms=6, expiry=None, code=None, owner=None)
+           threshold=5, terms=6, expiry=None)
 
 HOTELS = [("KH", KH), ("TPE", TPE)]
 
@@ -111,7 +112,9 @@ def read_prizes(rows):
                 "spend_threshold": None if threshold == "X" else threshold,
                 "terms": cell(row[col["terms"]]),
                 "expiry_note": cell(row[col["expiry"]]) if col["expiry"] is not None else None,
-                "owner": cell(row[col["owner"]]) if col["owner"] is not None else None,
+                # ⚠️ 刻意【不】匯入 Excel 的「庫存歸屬部門 / 負責申請人」欄 ——
+                #    那是同事姓名，程式從來沒用到，存進 repo 與 DB 只是多一份個資。
+                #    要查誰負責哪個獎品，直接看行銷的 Excel。
             })
     return prizes
 

@@ -83,7 +83,6 @@ CREATE TABLE IF NOT EXISTS prizes (
   spend_threshold TEXT,
   terms           TEXT,
   expiry_note     TEXT,
-  owner           TEXT,
   visible         BOOLEAN NOT NULL DEFAULT true,  -- false = 轉盤/獎項一覽都不顯示，也抽不到
   active          BOOLEAN NOT NULL DEFAULT true,
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -92,6 +91,9 @@ CREATE INDEX IF NOT EXISTS prizes_pool_idx ON prizes (tier, active, visible);
 -- 既有資料庫補欄位（CREATE TABLE IF NOT EXISTS 不會幫既有表加欄位）
 ALTER TABLE prizes ADD COLUMN IF NOT EXISTS claim_mode TEXT NOT NULL DEFAULT 'coupon';
 ALTER TABLE prizes ADD COLUMN IF NOT EXISTS position   INTEGER NOT NULL DEFAULT 0;
+-- 脫敏：owner 欄存的是 Excel 的「負責申請人」= 同事姓名，程式從來沒讀過。
+-- 這行會把已經寫進 production DB 的那些姓名真的刪掉，不只是不再寫入。
+ALTER TABLE prizes DROP COLUMN IF EXISTS owner;
 
 -- 任務完成紀錄（一人一任務只能領一次）
 CREATE TABLE IF NOT EXISTS task_claims (
