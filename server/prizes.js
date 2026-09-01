@@ -17,20 +17,16 @@ import { query } from "./db.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-/** 本階段只開放高雄。臺北待開幕後另行公告（Tony 2026-09-01）。 */
-export const ACTIVE_HOTELS = ["KH"];
+/** 兩館的獎項共用同一個轉盤；差別在領獎方式（見 prizes.json 的 claim_mode）。 */
+export const HOTEL_LABEL = { KH: "高雄洲際酒店", TPE: "臺北洲際酒店" };
 
 export const TIER_LABEL = { 5: "一等獎", 3: "二等獎", 1: "三等獎" };
 export const TIER_COST = { 5: 5, 3: 3, 1: 1 };
 export const TIERS = [1, 3, 5];
 
 export async function loadPrizeSeed() {
-  const all = [];
-  for (const hotel of ACTIVE_HOTELS) {
-    const raw = await readFile(join(HERE, `prizes.${hotel.toLowerCase()}.json`), "utf8");
-    all.push(...JSON.parse(raw));
-  }
-  return all;
+  const raw = await readFile(join(HERE, "prizes.json"), "utf8");
+  return JSON.parse(raw);
 }
 
 export async function seedPrizes() {
@@ -43,14 +39,16 @@ export async function seedPrizes() {
   for (const p of seed) {
     await query(
       `INSERT INTO prizes
-         (id, hotel, tier, slot, name, coupon_link, coin_reward, quota,
-          weight, spend_threshold, terms, expiry_note, owner, visible, active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,true,true)
+         (id, hotel, tier, slot, position, name, claim_mode, coupon_link, coin_reward,
+          quota, weight, spend_threshold, terms, expiry_note, owner, visible, active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,true,true)
        ON CONFLICT (id) DO UPDATE SET
          hotel           = EXCLUDED.hotel,
          tier            = EXCLUDED.tier,
          slot            = EXCLUDED.slot,
+         position        = EXCLUDED.position,
          name            = EXCLUDED.name,
+         claim_mode      = EXCLUDED.claim_mode,
          coupon_link     = EXCLUDED.coupon_link,
          coin_reward     = EXCLUDED.coin_reward,
          quota           = EXCLUDED.quota,
@@ -60,8 +58,9 @@ export async function seedPrizes() {
          expiry_note     = EXCLUDED.expiry_note,
          owner           = EXCLUDED.owner,
          updated_at      = now()`,
-      [p.id, p.hotel, p.tier, p.slot, p.name, p.coupon_link, p.coin_reward,
-       p.quota, p.weight, p.spend_threshold, p.terms, p.expiry_note, p.owner],
+      [p.id, p.hotel, p.tier, p.slot, p.position ?? 0, p.name, p.claim_mode ?? "coupon",
+       p.coupon_link, p.coin_reward, p.quota, p.weight, p.spend_threshold,
+       p.terms, p.expiry_note, p.owner],
     );
   }
 

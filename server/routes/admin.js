@@ -84,32 +84,66 @@ router.get("/stats", async (_req, res) => {
   });
 });
 
-/** 中獎名單 CSV（UTF-8 BOM，Excel 直接開得起來）。 */
+/** 中獎名單 CSV（UTF-8 BOM，Excel 直接開得起來）。
+ *  臺北的獎（claim_mode='contact'）不發券，靠這份名單的聯絡資訊由專人聯繫。 */
 router.get("/winners.csv", async (_req, res) => {
   const { rows } = await query(
-    `SELECT d.created_at, d.tier, d.prize_name, d.code, d.coin_reward,
+    `SELECT d.id, d.created_at, d.hotel, d.tier, d.prize_name, d.code, d.coin_reward,
             d.pushed, d.push_error, d.claim_used_at,
-            p.display_name, d.line_user_id,
-            pr.name AS profile_name, pr.phone, pr.email
+            pl.display_name, d.line_user_id,
+            pz.claim_mode,
+            c.name AS contact_name, c.phone AS contact_phone,
+            c.email AS contact_email, c.contact_window,
+            pr.name AS profile_name, pr.phone AS profile_phone, pr.email AS profile_email
        FROM draws d
-       JOIN players p ON p.line_user_id = d.line_user_id
-       LEFT JOIN player_profiles pr ON pr.line_user_id = d.line_user_id
+       JOIN players pl ON pl.line_user_id = d.line_user_id
+       JOIN prizes pz  ON pz.id = d.prize_id
+  LEFT JOIN prize_contacts c   ON c.draw_id = d.id
+  LEFT JOIN player_profiles pr ON pr.line_user_id = d.line_user_id
       ORDER BY d.created_at DESC`,
   );
-  const head = ["時間", "等級", "獎品", "兌換碼", "洲遊幣", "已推播", "推播錯誤",
-                "已領取", "LINE 名稱", "LINE UserId", "姓名", "手機", "Email"];
+  const head = ["中獎編號", "時間", "館別", "等級", "獎品", "領獎方式", "兌換碼", "洲遊幣",
+                "已推播", "推播錯誤", "券已領取",
+                "聯絡姓名", "聯絡手機", "聯絡Email", "方便聯繫時段", "聯絡資訊已填",
+                "LINE 名稱", "LINE UserId", "會員姓名", "會員手機", "會員Email"];
   const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const HOTEL_CH = { KH: "高雄洲際", TPE: "臺北洲際" };
   const body = rows.map((r) => [
-    r.created_at.toISOString(), TIER_LABEL[r.tier], r.prize_name, r.code ?? "",
-    r.coin_reward || "", r.pushed ? "是" : "否", r.push_error ?? "",
-    r.claim_used_at ? r.claim_used_at.toISOString() : "", r.display_name ?? "",
-    r.line_user_id, r.profile_name ?? "", r.phone ?? "", r.email ?? "",
+    r.id, r.created_at.toISOString(), HOTEL_CH[r.hotel] ?? r.hotel, TIER_LABEL[r.tier],
+    r.prize_name,
+    r.coin_reward ? "洲遊幣入帳" : (r.claim_mode === "contact" ? "留聯絡資訊（專人聯繫）" : "Omnichat 發券"),
+    r.code ?? "", r.coin_reward || "",
+    r.pushed ? "是" : "否", r.push_error ?? "",
+    r.claim_used_at ? r.claim_used_at.toISOString() : "",
+    r.contact_name ?? "", r.contact_phone ?? "", r.contact_email ?? "", r.contact_window ?? "",
+    r.claim_mode === "contact" && !r.coin_reward ? (r.contact_name ? "是" : "❌ 未填") : "",
+    r.display_name ?? "", r.line_user_id,
+    r.profile_name ?? "", r.profile_phone ?? "", r.profile_email ?? "",
   ].map(esc).join(","));
 
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition",
     `attachment; filename="intercoins-winners-${new Date().toISOString().slice(0, 10)}.csv"`);
   res.send("﻿" + [head.map(esc).join(","), ...body].join("\r\n"));
+});
+
+/** 臺北待聯繫名單 —— 中了臺北的獎、已留聯絡資訊、還沒處理的。給臺北洲際的人用。 */
+router.get("/contacts", async (_req, res) => {
+  const { rows } = await query(
+    `SELECT d.id AS draw_id, d.created_at, d.prize_name, d.code, d.tier,
+            c.name, c.phone, c.email, c.contact_window, c.created_at AS filled_at
+       FROM draws d
+       JOIN prizes pz ON pz.id = d.prize_id
+  LEFT JOIN prize_contacts c ON c.draw_id = d.id
+      WHERE pz.claim_mode = 'contact' AND d.coin_reward = 0
+      ORDER BY d.created_at DESC`,
+  );
+  res.json({
+    total: rows.length,
+    filled: rows.filter((r) => r.name).length,
+    pending: rows.filter((r) => !r.name).length,
+    winners: rows.map((r) => ({ ...r, label: TIER_LABEL[r.tier] })),
+  });
 });
 
 /** 補推播：推播失敗的中獎紀錄重送一次。 */

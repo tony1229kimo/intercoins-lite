@@ -63,18 +63,23 @@ CREATE TABLE IF NOT EXISTS players (
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- 獎項（來源：行銷提供的「獎項一覽表.xlsx」，由 server/prizes.*.json 匯入）
+-- 獎項（來源：行銷提供的「獎項一覽表.xlsx」，由 server/prizes.json 匯入）
 CREATE TABLE IF NOT EXISTS prizes (
   id              TEXT PRIMARY KEY,
-  hotel           TEXT    NOT NULL,
+  hotel           TEXT    NOT NULL,          -- KH 高雄 / TPE 臺北
   tier            INTEGER NOT NULL,          -- 抽一次要投的洲遊幣數：1=三等 3=二等 5=一等
-  slot            INTEGER NOT NULL,          -- 轉盤格位 1..6
+  slot            INTEGER NOT NULL,          -- Excel 上的格號（兩館會撞號，僅供對照）
+  position        INTEGER NOT NULL DEFAULT 0,-- 轉盤實際格位（同等級內唯一）
   name            TEXT    NOT NULL,
+  -- 領獎方式：
+  --   coupon  = 推 Omnichat 券到 LINE，連結單次有效（高雄）
+  --   contact = 不觸發連結，跳表單收聯絡資訊，由飯店人員後續聯繫（臺北，細則未定案）
+  claim_mode      TEXT    NOT NULL DEFAULT 'coupon',
   coupon_link     TEXT,                      -- Omnichat OMO bind URL；NULL = 虛擬獎（洲遊幣）
   coin_reward     INTEGER NOT NULL DEFAULT 0,
   quota           INTEGER NOT NULL DEFAULT 0,-- 名額；0 = 不限量
   issued          INTEGER NOT NULL DEFAULT 0,
-  weight          NUMERIC NOT NULL DEFAULT 0,-- 中獎權重（= Excel 機率欄）
+  weight          NUMERIC NOT NULL DEFAULT 0,-- 中獎權重（%）
   spend_threshold TEXT,
   terms           TEXT,
   expiry_note     TEXT,
@@ -83,7 +88,10 @@ CREATE TABLE IF NOT EXISTS prizes (
   active          BOOLEAN NOT NULL DEFAULT true,
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS prizes_pool_idx ON prizes (hotel, tier, active, visible);
+CREATE INDEX IF NOT EXISTS prizes_pool_idx ON prizes (tier, active, visible);
+-- 既有資料庫補欄位（CREATE TABLE IF NOT EXISTS 不會幫既有表加欄位）
+ALTER TABLE prizes ADD COLUMN IF NOT EXISTS claim_mode TEXT NOT NULL DEFAULT 'coupon';
+ALTER TABLE prizes ADD COLUMN IF NOT EXISTS position   INTEGER NOT NULL DEFAULT 0;
 
 -- 任務完成紀錄（一人一任務只能領一次）
 CREATE TABLE IF NOT EXISTS task_claims (
@@ -124,6 +132,23 @@ CREATE TABLE IF NOT EXISTS coin_ledger (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS coin_ledger_user_idx ON coin_ledger (line_user_id, created_at DESC);
+
+-- 中獎聯絡資訊（claim_mode='contact' 的獎項專用）
+--
+-- 臺北洲際的兌換細則還沒定案，所以中臺北的獎不發 Omnichat 券，
+-- 改請中獎者留下聯絡方式，由臺北洲際的人後續以信件聯繫。
+-- 一筆中獎紀錄只會有一筆聯絡資訊（draw_id 當 PK），重填會覆蓋。
+CREATE TABLE IF NOT EXISTS prize_contacts (
+  draw_id        BIGINT      PRIMARY KEY REFERENCES draws(id) ON DELETE CASCADE,
+  line_user_id   TEXT        NOT NULL,
+  name           TEXT        NOT NULL,
+  phone          TEXT        NOT NULL,
+  email          TEXT        NOT NULL,
+  contact_window TEXT,                       -- 方便聯繫時段：上午/下午/晚上/皆可
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS prize_contacts_user_idx ON prize_contacts (line_user_id);
 
 -- 個資同意（活動條款「填寫資料領取洲遊幣」）
 CREATE TABLE IF NOT EXISTS player_profiles (

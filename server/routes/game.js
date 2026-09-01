@@ -4,14 +4,18 @@
 import { asyncRouter } from "../lib/router.js";
 import { query, withTx } from "../db.js";
 import { requireLiffAuth } from "../middleware/liffAuth.js";
-import { checkFriendship, pushRewardCoupon } from "../lib/line.js";
+import { checkFriendship, pushRewardCoupon, pushContactReminder } from "../lib/line.js";
 import { weightedPick, makeCode, makeClaimToken } from "../lib/random.js";
 import { PUBLISHED_TASKS, TASK_BY_ID, MAX_EARNABLE } from "../lib/tasks.js";
 import { TIER_LABEL, TIER_COST, TIERS } from "../prizes.js";
 
 const router = asyncRouter();
 const liffAuth = requireLiffAuth();
-const HOTEL = "KH"; // 本階段只開放高雄
+
+// 加好友檢查與所有推播都走【高雄洲際的 LINE 官方帳號】—— 客人是從高雄的 LIFF 進來的。
+// 轉盤上雖然同時有臺北的獎項，但臺北是另一個 OA，我們沒有它的 token，
+// 所以臺北的獎不推券、改收聯絡資訊（prizes.claim_mode = 'contact'）。
+const OA_HOTEL = "KH";
 
 /** 首次進來自動建檔；每次都更新 LINE 顯示名稱/頭像。 */
 async function upsertPlayer(req) {
@@ -23,7 +27,7 @@ async function upsertPlayer(req) {
        picture_url  = COALESCE(EXCLUDED.picture_url,  players.picture_url),
        updated_at   = now()
      RETURNING *`,
-    [req.lineUserId, req.lineDisplayName ?? null, req.linePictureUrl ?? null, HOTEL],
+    [req.lineUserId, req.lineDisplayName ?? null, req.linePictureUrl ?? null, OA_HOTEL],
   );
   return rows[0];
 }
@@ -47,7 +51,7 @@ async function addCoins(client, userId, delta, reason, ref) {
 // 客人沒加高雄洲際 LINE 好友之前不能進遊戲 —— 中獎券是用 push 發的，
 // 不是好友就 silent fail，等於中了獎卻拿不到東西。
 router.get("/me/friendship", liffAuth, async (req, res) => {
-  const result = await checkFriendship(HOTEL, req.lineUserId);
+  const result = await checkFriendship(OA_HOTEL, req.lineUserId);
   if (!result.ok) {
     // 我們自己的基礎設施壞掉不該把真實客人擋在外面 —— 降級放行並留 log。
     console.warn("[friendship] 檢查失敗，降級為已加好友:", result.reason);
@@ -60,33 +64,50 @@ router.get("/me/friendship", liffAuth, async (req, res) => {
 router.get("/state", liffAuth, async (req, res) => {
   const player = await upsertPlayer(req);
 
-  const [{ rows: claimed }, { rows: prizes }, { rows: won }] = await Promise.all([
-    query("SELECT task_id FROM task_claims WHERE line_user_id = $1", [req.lineUserId]),
-    query(
-      `SELECT tier, slot, name, coin_reward,
-              (weight > 0 AND (quota = 0 OR issued < quota)) AS winnable
-         FROM prizes
-        WHERE hotel = $1 AND active AND visible
-        ORDER BY tier, slot`,
-      [HOTEL],
-    ),
-    query(
-      `SELECT prize_name, tier, code, coin_reward, created_at
-         FROM draws WHERE line_user_id = $1 ORDER BY created_at DESC LIMIT 20`,
-      [req.lineUserId],
-    ),
-  ]);
+  const [{ rows: claimed }, { rows: prizes }, { rows: won }, { rows: pending }, { rows: profile }] =
+    await Promise.all([
+      query("SELECT task_id FROM task_claims WHERE line_user_id = $1", [req.lineUserId]),
+      query(
+        `SELECT id, hotel, tier, position, name, coin_reward, claim_mode,
+                (weight > 0 AND (quota = 0 OR issued < quota)) AS winnable
+           FROM prizes
+          WHERE active AND visible
+          ORDER BY tier, position`,
+      ),
+      query(
+        `SELECT prize_name, tier, code, coin_reward, created_at
+           FROM draws WHERE line_user_id = $1 ORDER BY created_at DESC LIMIT 20`,
+        [req.lineUserId],
+      ),
+      // 中了臺北的獎但還沒留聯絡資訊 —— 客人關掉彈窗就跑掉的話，下次進來要再提醒。
+      query(
+        `SELECT d.id, d.prize_name, d.tier, d.code
+           FROM draws d
+           JOIN prizes p ON p.id = d.prize_id
+      LEFT JOIN prize_contacts c ON c.draw_id = d.id
+          WHERE d.line_user_id = $1 AND p.claim_mode = 'contact' AND c.draw_id IS NULL
+          ORDER BY d.created_at`,
+        [req.lineUserId],
+      ),
+      query(
+        "SELECT name, phone, email FROM player_profiles WHERE line_user_id = $1",
+        [req.lineUserId],
+      ),
+    ]);
 
   const done = Object.fromEntries(claimed.map((r) => [r.task_id, true]));
 
-  // 轉盤盤面：每個等級的獎品按格位排好。
-  // ⚠️ 只吐名稱與格位，不吐 weight / quota / issued —— 機率與庫存不對客人公開
-  //    （Tony 2026-09-01：客人不該從 F12 看到中獎率或剩幾張）。
+  // 轉盤盤面：每個等級的獎品按 position 排好（兩館的獎項在同一個盤面上）。
+  // ⚠️ 只吐 id / 名稱 / 館別 / 領獎方式，不吐 weight / quota / issued ——
+  //    機率與庫存不對客人公開（Tony 2026-09-01：客人不該從 F12 看到中獎率或剩幾張）。
   const wheel = {};
   const tierOpen = {};
   for (const tier of TIERS) {
     const slots = prizes.filter((p) => p.tier === tier);
-    wheel[tier] = slots.map((p) => ({ slot: p.slot, name: p.name, coin: p.coin_reward }));
+    wheel[tier] = slots.map((p) => ({
+      id: p.id, hotel: p.hotel, name: p.name,
+      coin: p.coin_reward, claimMode: p.claim_mode,
+    }));
     tierOpen[tier] = slots.some((p) => p.winnable);
   }
 
@@ -110,6 +131,12 @@ router.get("/state", liffAuth, async (req, res) => {
       prize: w.prize_name, tier: w.tier, code: w.code,
       coin: w.coin_reward, at: w.created_at,
     })),
+    // 還沒補聯絡資訊的臺北中獎紀錄，前端會再跳一次表單。
+    pendingContacts: pending.map((d) => ({
+      drawId: d.id, prize: d.prize_name, tier: d.tier, code: d.code,
+    })),
+    // 已填過個人資料就幫客人帶入，不用重打一次。
+    contactPrefill: profile[0] ?? null,
   });
 });
 
@@ -209,11 +236,11 @@ router.post("/spin", liffAuth, async (req, res) => {
 
       const { rows: pool } = await client.query(
         `SELECT * FROM prizes
-          WHERE hotel = $1 AND tier = $2 AND active AND visible
+          WHERE tier = $1 AND active AND visible
             AND weight > 0 AND (quota = 0 OR issued < quota)
-          ORDER BY slot
+          ORDER BY position
           FOR UPDATE`,
-        [HOTEL, tier],
+        [tier],
       );
       if (!pool.length) throw Object.assign(new Error("tier_unavailable"), { status: 409 });
 
@@ -235,17 +262,21 @@ router.post("/spin", liffAuth, async (req, res) => {
       }
 
       // 虛擬獎（洲遊幣）直接入帳，不開票、不推播。
+      // 臺北的獎（claim_mode='contact'）也不開 claim_token —— 細則未定案，不發 Omnichat 券，
+      // 改請中獎者留聯絡資訊。兌換碼還是給，方便日後對帳與客服查詢。
+      const isContact = prize.claim_mode === "contact";
       const code = isCoinPrize ? null : makeCode();
-      const claimToken = isCoinPrize || !prize.coupon_link ? null : makeClaimToken();
+      const claimToken = (isCoinPrize || isContact || !prize.coupon_link) ? null : makeClaimToken();
 
       const { rows: [draw] } = await client.query(
         `INSERT INTO draws
            (line_user_id, hotel, tier, cost, prize_id, prize_name, coin_reward, code, claim_token)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [req.lineUserId, HOTEL, tier, cost, prize.id, prize.name, prize.coin_reward, code, claimToken],
+        [req.lineUserId, prize.hotel, tier, cost, prize.id, prize.name,
+         prize.coin_reward, code, claimToken],
       );
 
-      return { draw, prize, balance, isCoinPrize };
+      return { draw, prize, balance, isCoinPrize, isContact };
     });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ error: err.message });
@@ -253,7 +284,7 @@ router.post("/spin", liffAuth, async (req, res) => {
     return res.status(500).json({ error: "internal_error" });
   }
 
-  const { draw, prize, balance, isCoinPrize } = outcome;
+  const { draw, prize, balance, isCoinPrize, isContact } = outcome;
 
   // 推播刻意放在 transaction 之外 —— LINE 掛掉不該讓客人已經抽中的獎消失。
   //
@@ -263,7 +294,7 @@ router.post("/spin", liffAuth, async (req, res) => {
   //   客人翻遍聊天室找不到券，只會變成客訴。）
   let pushed = false;
   if (!isCoinPrize && draw.claim_token) {
-    const r = await pushRewardCoupon(HOTEL, req.lineUserId, {
+    const r = await pushRewardCoupon(OA_HOTEL, req.lineUserId, {
       ...draw,
       tier_label: TIER_LABEL[tier],
       spend_threshold: prize.spend_threshold,
@@ -274,12 +305,28 @@ router.post("/spin", liffAuth, async (req, res) => {
     await query("UPDATE draws SET pushed = $2, push_error = $3 WHERE id = $1",
       [draw.id, r.ok, r.ok ? null : r.reason])
       .catch((e) => console.error("[spin] push 結果寫入失敗:", e));
+  } else if (isContact) {
+    // 臺北的獎：推一則提醒，避免客人關掉彈窗後就忘了要留聯絡資訊。
+    // 走的還是高雄的 OA（客人是從那裡進來的），內容只說明後續由臺北洲際聯繫。
+    const r = await pushContactReminder(OA_HOTEL, req.lineUserId, {
+      prizeName: draw.prize_name,
+      code: draw.code,
+      tierLabel: TIER_LABEL[tier],
+    });
+    pushed = r.ok;
+    if (!r.ok) console.warn(`[spin] 聯絡提醒推播失敗 draw=${draw.id}:`, r.reason);
+    await query("UPDATE draws SET pushed = $2, push_error = $3 WHERE id = $1",
+      [draw.id, r.ok, r.ok ? null : r.reason])
+      .catch((e) => console.error("[spin] push 結果寫入失敗:", e));
   }
 
   res.json({
     ok: true,
-    slot: prize.slot,
+    prizeId: prize.id,
     prize: prize.name,
+    hotel: prize.hotel,
+    claimMode: prize.claim_mode,
+    drawId: draw.id,
     tier,
     tierLabel: TIER_LABEL[tier],
     code: draw.code,
@@ -290,6 +337,46 @@ router.post("/spin", liffAuth, async (req, res) => {
     spendThreshold: prize.spend_threshold,
     expiryNote: prize.expiry_note,
   });
+});
+
+// ── 中獎聯絡資訊（臺北獎項專用）────────────────────────────────
+// 臺北洲際的兌換細則還沒定案 → 不發 Omnichat 券，改收聯絡方式，
+// 由臺北洲際的人後續以信件聯繫。
+router.post("/draws/:id/contact", liffAuth, async (req, res) => {
+  const drawId = Number(req.params.id);
+  if (!Number.isInteger(drawId)) return res.status(400).json({ error: "bad_draw_id" });
+
+  const name = String(req.body?.name ?? "").trim();
+  const phone = String(req.body?.phone ?? "").replace(/[-\s]/g, "");
+  const email = String(req.body?.email ?? "").trim();
+  const rawWindow = String(req.body?.contactWindow ?? "").trim();
+  const contactWindow = ["上午", "下午", "晚上", "皆可"].includes(rawWindow) ? rawWindow : null;
+
+  if (!name) return res.status(400).json({ error: "name_required" });
+  if (!/^09\d{8}$/.test(phone)) return res.status(400).json({ error: "phone_invalid" });
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: "email_invalid" });
+
+  // 一定要確認這筆中獎紀錄是【這個人自己的】，否則任何人都能覆蓋別人的聯絡資訊。
+  const { rows } = await query(
+    `SELECT d.id, p.claim_mode
+       FROM draws d JOIN prizes p ON p.id = d.prize_id
+      WHERE d.id = $1 AND d.line_user_id = $2`,
+    [drawId, req.lineUserId],
+  );
+  if (!rows.length) return res.status(404).json({ error: "draw_not_found" });
+  if (rows[0].claim_mode !== "contact") return res.status(400).json({ error: "not_contact_prize" });
+
+  await query(
+    `INSERT INTO prize_contacts
+       (draw_id, line_user_id, name, phone, email, contact_window)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (draw_id) DO UPDATE SET
+       name = EXCLUDED.name, phone = EXCLUDED.phone, email = EXCLUDED.email,
+       contact_window = EXCLUDED.contact_window, updated_at = now()`,
+    [drawId, req.lineUserId, name, phone, email, contactWindow],
+  );
+
+  res.json({ ok: true });
 });
 
 export default router;

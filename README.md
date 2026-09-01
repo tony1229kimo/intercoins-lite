@@ -1,11 +1,19 @@
 # 洲遊幣 Lite · InterCoins Lite
 
-高雄洲際酒店 中秋轉盤抽獎 LIFF 遊戲。客人在 LINE 內完成任務蒐集「洲遊幣」，
-投入轉盤抽獎，中獎券自動推播到 LINE 聊天室。
+臺北／高雄洲際酒店 中秋轉盤抽獎 LIFF 遊戲。客人在 LINE 內完成任務蒐集「洲遊幣」，
+投入轉盤抽獎。
 
 - **活動期間**：2026-09-01 ～ 2026-11-30
-- **本階段範圍**：**只做高雄洲際**。臺北洲際待開幕後另行開放（獎項表已備妥，未啟用）
 - **正式網址**：https://intercoins.ictaiwan.net
+- **兩館獎項共用同一個轉盤**，差別在領獎方式：
+
+| 館別 | `claim_mode` | 領獎方式 | 為什麼 |
+|---|---|---|---|
+| 高雄洲際 | `coupon` | Omnichat 券推到 LINE 聊天室，連結**單次有效** | 細則已定案，OA token 也在我們手上 |
+| 臺北洲際 | `contact` | **不觸發連結**，跳表單收姓名／手機／Email／方便聯繫時段，由專人以信件聯繫 | 兌換細則還沒定案（Excel 細則欄全寫「待酒店開幕後公告」），且臺北是**另一個 LINE OA**，我們沒有它的 token |
+
+> 臺北細則定案、也拿到臺北 OA token 之後，把該獎項的 `claim_mode` 改成 `coupon`
+> 就自動改走發券流程 —— **程式完全不用動**。
 
 ## 這份專案的來源
 
@@ -28,12 +36,13 @@ public/index.html     遊戲本體（單檔，無 build step）
 public/assets/        轉盤三層美術 L1/L2/L3、開場影片
 server/index.js       Express：靜態檔 + /api/*（同一個服務、同一個網域）
 server/db.js          Postgres 連線池 + idempotent schema
-server/prizes.js      獎項匯入（prizes.kh.json → DB）
-server/prizes.kh.json 獎項資料（由 scripts/import-prizes.py 產生，勿手改）
+server/prizes.js      獎項匯入（prizes.json → DB）
+server/prizes.json    獎項資料 · 兩館共 20 筆（由 scripts/import-prizes.py 產生，勿手改）
 server/routes/game.js  /api/state /api/spin /api/tasks /api/profile /api/me/friendship
-server/routes/claim.js /api/claim/:token —— 單次有效的 Omnichat 轉址
-server/routes/admin.js /api/admin/* —— 庫存、機率、中獎名單 CSV、補推播
-scripts/import-prizes.py  Excel → prizes.kh.json
+                       /api/draws/:id/contact —— 臺北中獎者的聯絡資訊
+server/routes/claim.js /api/claim/:token —— 單次有效的 Omnichat 轉址（高雄）
+server/routes/admin.js /api/admin/* —— 庫存、機率、中獎名單 CSV、臺北待聯繫名單、補推播
+scripts/import-prizes.py  Excel → prizes.json（含機率分配與 claim_mode）
 ```
 
 **前後端刻意同一個服務、同一個網域。** 味蕾旅遊地圖曾因前後端分網域，
@@ -50,7 +59,11 @@ Flex 訊息裡的 `/api/claim/:token` 指到錯誤 host 而 404（POSTMORTEM Bug
 4. `GET /api/state` 取餘額、任務、轉盤盤面、中獎紀錄
 5. 完成任務 → `POST /api/tasks/:id/claim` → 後端發幣（一個帳號一個任務只發一次）
 6. 投幣抽獎 → `POST /api/spin` → **後端**加權抽獎、扣庫存、扣幣、開票、推播
-7. 中獎券以 LINE Flex 推到聊天室，按鈕連到 `/api/claim/:token`（**單次有效**）
+7. 中獎後依該獎項的 `claim_mode` 分流：
+   - **高雄（`coupon`）** → Flex 券推到聊天室，按鈕連到 `/api/claim/:token`（**單次有效**）
+   - **臺北（`contact`）** → 畫面跳表單收聯絡資訊 → `POST /api/draws/:id/contact`；
+     同時推一則提醒進聊天室。客人若關掉彈窗就跑了，下次進遊戲時
+     `/api/state` 的 `pendingContacts` 會再問一次，直到填完為止
 
 ---
 
@@ -58,7 +71,9 @@ Flex 訊息裡的 `/api/claim/:token` 指到錯誤 host 而 404（POSTMORTEM Bug
 
 | 機制 | 為什麼 |
 |---|---|
-| 抽獎在後端，前端只收 `slot` | 前端抽獎 = 客人改個變數就中頭獎。前端**拿不到**機率與庫存 |
+| 抽獎在後端，前端只收獎項 `id` | 前端抽獎 = 客人改個變數就中頭獎。前端**拿不到**機率與庫存 |
+| 兩館獎項用 `id` 對位，不用 `slot` | 兩館的 slot 會撞號（`kh-1-1` 和 `tpe-1-1` 都是「第 1 格」），用 slot 會停錯格 |
+| `/api/draws/:id/contact` 驗證 draw 屬於本人 | 否則任何登入者都能覆蓋別人的中獎聯絡資訊 |
 | `/api/spin` 全程 transaction + `FOR UPDATE` | 併發抽獎不會超發庫存（只有 1 張的五折券不會發出兩張） |
 | Omnichat 連結包一層單次 `claim_token` | Omnichat bind URL 是 stateless 的，**點幾次發幾張券**。Flex 訊息永遠留在對話歷史 → 不包就是無限領券（POSTMORTEM Bug #9） |
 | 中獎彈窗**不放**領取連結 | 同上。券只在 LINE 對話裡領一次 |
@@ -104,7 +119,8 @@ Messaging token 都能跟味蕾地圖共用，加好友檢查也共用同一個�
 python scripts/import-prizes.py "C:\Users\smtony\Downloads\獎項一覽表.xlsx"
 ```
 
-檢查印出的機率表沒問題，然後 `git commit` + `git push`，Zeabur 重新部署即生效。
+檢查印出的機率表沒問題（每個等級要剛好 100%，臺北要全部標 `★ 留聯絡資訊`），
+然後 `git commit` + `git push`，Zeabur 重新部署即生效。
 **已發出的數量（`prizes.issued`）不會被重置。**
 
 臨時要調機率不想重新部署，可直接打後台 API：
@@ -118,8 +134,12 @@ curl -X PATCH https://intercoins.ictaiwan.net/api/admin/prizes/kh-5-1 \
 ### 機率規則
 
 Excel 的機率欄已被行銷移除，權重改由 `scripts/import-prizes.py` 的 `WEIGHT_PCT` 決定
-（Tony 2026-09-01 拍板）：一等獎三個實體獎品**各 2%**，其餘由「洲遊幣 +N」吸收；
-二等／三等比照同一精神。同等級中**沒有指定的格位自動吃掉剩餘機率**。
+（Tony 2026-09-01 拍板）：**一等獎所有實體獎品（含臺北）一律各 2%**，其餘由「洲遊幣 +5」
+吸收；二等／三等依名額比例壓低實體獎，同樣由洲遊幣格吸收剩餘。
+同等級中**沒有指定的格位自動吃掉剩餘機率**，兩館獎項跨館一起分配到 100%。
+
+⚠️ 加入臺北後，三等 7 格、二等 6 格、一等 7 格，但盤面美術畫的是 12 格 ——
+**7 格不會對齊格線**（純視覺問題，功能正常）。詳見 `docs/獎池容量分析.md`。
 
 ---
 
@@ -134,6 +154,9 @@ curl -H "Authorization: Bearer $ADMIN_TOKEN" https://intercoins.ictaiwan.net/api
 
 # 中獎名單 CSV（UTF-8 BOM，Excel 直接開）
 curl -H "Authorization: Bearer $ADMIN_TOKEN" -O https://intercoins.ictaiwan.net/api/admin/winners.csv
+
+# 臺北待聯繫名單（給臺北洲際的人跟進）
+curl -H "Authorization: Bearer $ADMIN_TOKEN" https://intercoins.ictaiwan.net/api/admin/contacts
 
 # 推播失敗的補送
 curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://intercoins.ictaiwan.net/api/admin/draws/123/repush
@@ -160,9 +183,17 @@ curl -s https://intercoins.ictaiwan.net/api/health
 ```
 
 `db` 要是 `"ok"`，五個 `*_configured` 要都是 `true`。
-接著**用手機在 LINE 內實際玩一輪**：登入 → 加好友 gate → 做任務拿幣 → 抽獎 →
-確認 LINE 收到 Flex 券 → 點領取 → **再點第二次應該顯示「此連結已使用過」**。
+接著**用手機在 LINE 內實際玩一輪**，兩條領獎路徑都要走過：
+
+**高雄的獎（coupon）**
+登入 → 加好友 gate → 做任務拿幣 → 抽獎 → 確認 LINE 收到 Flex 券 → 點領取 →
+**再點第二次應該顯示「此連結已使用過」**。
+
+**臺北的獎（contact）**
+抽到臺北獎項 → 應該**不出現領取連結**，改跳聯絡資訊表單 → 送出 →
+`GET /api/admin/contacts` 要看得到這筆 → 關掉遊戲重開，**不應該再被問一次**。
+反過來，若刻意按 Esc 跳過表單，重開遊戲**應該要再問一次**。
 
 ---
 
-*高雄洲際酒店 · Tony Chen · 2026-09*
+*臺北洲際酒店 × 高雄洲際酒店 · Tony Chen · 2026-09*

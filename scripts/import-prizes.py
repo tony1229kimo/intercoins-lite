@@ -1,5 +1,5 @@
 """
-獎項匯入：獎項一覽表.xlsx → server/prizes.kh.json
+獎項匯入：獎項一覽表.xlsx → server/prizes.json
 
 用法：
     python scripts/import-prizes.py "C:\\Users\\smtony\\Downloads\\獎項一覽表.xlsx"
@@ -18,89 +18,105 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SRC = Path.home() / "Downloads" / "獎項一覽表.xlsx"
 
 # 新版 Excel 18 欄：0-7 臺北 / 8-17 高雄。（舊版 20 欄含「機率」，行銷已移除。）
+# 臺北那半邊沒有「兌換期限 / 結帳 Code / 庫存歸屬部門」三欄。
 KH = dict(level=8, slot=9, name=10, link=11, quota=12,
           threshold=13, terms=14, expiry=15, code=16, owner=17)
+TPE = dict(level=0, slot=1, name=2, link=3, quota=4,
+           threshold=5, terms=6, expiry=None, code=None, owner=None)
+
+HOTELS = [("KH", KH), ("TPE", TPE)]
 
 TIER_BY_LEVEL = {"I": 5, "II": 3, "III": 1}   # 一等獎投 5 / 二等獎投 3 / 三等獎投 1
 TIER_LABEL = {5: "一等獎", 3: "二等獎", 1: "三等獎"}
 
-# ── 行銷指定隱藏的獎項（完全比對名稱）──────────────────────────
-# 轉盤、獎項一覽、抽獎池三處皆排除。本階段臺北整組不進，這兩筆是額外保險。
-HIDDEN = {
-    "臺北洲際酒店 高樓層開放式套房住宿一晚（含雙人早餐）",
-    "臺北洲際酒店 豪華經典房住宿一晚（含雙人早餐）",
-}
+# ── 領獎方式（Tony 2026-09-01）────────────────────────────────
+#   KH  → coupon ：中獎直接把 Omnichat 券推到 LINE 聊天室，連結單次有效
+#   TPE → contact：臺北洲際的兌換細則還沒定案，所以【不觸發連結】，
+#                  改跳表單請中獎者留姓名 / 手機 / Email / 方便聯繫時段，
+#                  由臺北洲際的人後續以信件聯繫。
+#   Excel 裡臺北其實也有 Omnichat 連結，照樣存進 DB 但不使用；
+#   等細則定案，把該獎項的 claim_mode 改成 coupon 就自動改走發券流程，程式不用動。
+CLAIM_MODE = {"KH": "coupon", "TPE": "contact"}
 
-# ── 中獎權重（Tony 2026-09-01 拍板）─────────────────────────────
-# Excel 已無機率欄。一等獎三個實體獎品各 2%，其餘由洲遊幣獎吸收；
-# 二等／三等比照同一精神：實體獎壓低、洲遊幣獎當「退幣重抽」吸收剩餘機率。
-# key = 獎項 id，value = 百分比。未列出的 id 自動吃掉該等級剩餘的機率。
+# ── 中獎權重（Tony 2026-09-01）─────────────────────────────────
+# Excel 已無機率欄。規則：
+#   一等獎 —— 所有實體獎品（含臺北）一律各 2%，剩餘由「洲遊幣 +5」吸收
+#   二等／三等 —— 依名額比例壓低實體獎，剩餘由「洲遊幣 +N」吸收
+# 兩館獎項共用同一個轉盤，所以權重是跨館一起分配到 100%。
+# key = 獎項 id，未列出的 id 自動吃掉該等級剩餘的機率。
 WEIGHT_PCT = {
-    # 一等獎（投 5 枚）
-    "kh-5-1": 2.0,    # 港灣海景開放式套房 住宿一晚
-    "kh-5-2": 2.0,    # 豪華經典房 住宿一晚
-    "kh-5-4": 2.0,    # 餐飲 5 折優惠禮遇
-    # kh-5-3 洲遊幣 +5 → 自動吃剩餘 94%
+    # ── 一等獎（投 5 枚）· 實體獎一律 2% ──
+    "kh-5-1": 2.0,    # 高雄 港灣海景開放式套房 住宿一晚
+    "kh-5-2": 2.0,    # 高雄 豪華經典房 住宿一晚
+    "kh-5-4": 2.0,    # 高雄 餐飲 5 折優惠禮遇
+    "tpe-5-1": 2.0,   # 臺北 雙人下午茶
+    "tpe-5-2": 2.0,   # 臺北 高樓層開放式套房住宿一晚
+    "tpe-5-3": 2.0,   # 臺北 豪華經典房住宿一晚
+    # kh-5-3《洲遊幣》+5 → 自動吃剩餘 88%
 
-    # 二等獎（投 3 枚）
-    "kh-3-1": 6.0,    # 餐飲 85 折優惠禮遇（名額 10）
-    "kh-3-3": 3.0,    # BL.T33 洲際經典雙人下午茶（名額 5）
-    "kh-3-4": 3.0,    # 玫果沁釀覆盆莓煎茶氣泡飲（名額 5）
-    # kh-3-2 洲遊幣 +3 → 自動吃剩餘 88%
+    # ── 二等獎（投 3 枚）──
+    "kh-3-1": 6.0,    # 高雄 餐飲 85 折優惠禮遇（名額 10）
+    "kh-3-3": 3.0,    # 高雄 BL.T33 洲際經典雙人下午茶（名額 5）
+    "kh-3-4": 3.0,    # 高雄 玫果沁釀覆盆莓煎茶氣泡飲（名額 5）
+    "tpe-3-1": 2.0,   # 臺北 全日餐廳雙人午餐（名額 3）
+    "tpe-3-2": 2.0,   # 臺北 氣泡茶 750ML（名額 3）
+    # kh-3-2《洲遊幣》+3 → 自動吃剩餘 84%
 
-    # 三等獎（投 1 枚）
-    "kh-1-1": 8.0,    # 明信片組（名額 20）
-    "kh-1-3": 8.0,    # 洲賀熊（名額 20）
-    "kh-1-4": 8.0,    # 旅行外幣收納錢包（名額 20）
-    "kh-1-5": 4.0,    # 天然楠竹不鏽鋼環保隨行瓶（名額 10）
-    "kh-1-6": 4.0,    # 餐飲抵用券 NT$500（名額 10）
-    # kh-1-2 洲遊幣 +1 → 自動吃剩餘 68%
+    # ── 三等獎（投 1 枚）──
+    "kh-1-1": 8.0,    # 高雄 明信片組（名額 20）
+    "kh-1-3": 8.0,    # 高雄 洲賀熊（名額 20）
+    "kh-1-4": 8.0,    # 高雄 旅行外幣收納錢包（名額 20）
+    "kh-1-5": 4.0,    # 高雄 天然楠竹不鏽鋼環保隨行瓶（名額 10）
+    "kh-1-6": 4.0,    # 高雄 餐飲抵用券 NT$500（名額 10）
+    "tpe-1-1": 4.0,   # 臺北 楠竹玻璃永續隨行瓶（名額 10）
+    # kh-1-2《洲遊幣》+1 → 自動吃剩餘 64%
 }
 
+COIN_RE = re.compile(r"洲遊幣》?\s*\+\s*(\d+)")
 
-def cell(v):
-    if v is None:
+
+def cell(value):
+    if value is None:
         return None
-    t = str(v).strip()
-    return t or None
+    text = str(value).strip()
+    return text or None
 
 
-def main():
-    src = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_SRC
-    if not src.exists():
-        sys.exit(f"找不到檔案：{src}")
-
-    ws = openpyxl.load_workbook(src, data_only=True)["獎項一覽表"]
-    rows = list(ws.iter_rows(values_only=True))
-
+def read_prizes(rows):
     prizes = []
-    for r in rows[2:]:
-        level, slot, name = cell(r[KH["level"]]), r[KH["slot"]], cell(r[KH["name"]])
-        if level not in TIER_BY_LEVEL or not name or name in HIDDEN:
-            continue
-        try:
-            quota = int(float(r[KH["quota"]] or 0))
-        except (TypeError, ValueError):
-            quota = 0
-        coin = re.search(r"洲遊幣》?\s*\+\s*(\d+)", name)
-        threshold = cell(r[KH["threshold"]])
-        prizes.append({
-            "id": f"kh-{TIER_BY_LEVEL[level]}-{int(slot)}",
-            "hotel": "KH",
-            "tier": TIER_BY_LEVEL[level],
-            "slot": int(slot),
-            "name": name,
-            "coupon_link": cell(r[KH["link"]]),
-            "coin_reward": int(coin.group(1)) if coin else 0,
-            "quota": quota,
-            "weight": 0.0,          # 下面統一分配
-            "spend_threshold": None if threshold == "X" else threshold,
-            "terms": cell(r[KH["terms"]]),
-            "expiry_note": cell(r[KH["expiry"]]),
-            "owner": cell(r[KH["owner"]]),
-        })
+    for hotel, col in HOTELS:
+        for row in rows[2:]:
+            level = cell(row[col["level"]])
+            name = cell(row[col["name"]])
+            if level not in TIER_BY_LEVEL or not name:
+                continue          # 空格位不放進轉盤
+            try:
+                quota = int(float(row[col["quota"]] or 0))
+            except (TypeError, ValueError):
+                quota = 0
+            coin = COIN_RE.search(name)
+            threshold = cell(row[col["threshold"]])
+            slot = int(row[col["slot"]])
+            prizes.append({
+                "id": f"{hotel.lower()}-{TIER_BY_LEVEL[level]}-{slot}",
+                "hotel": hotel,
+                "claim_mode": CLAIM_MODE[hotel],
+                "tier": TIER_BY_LEVEL[level],
+                "slot": slot,
+                "name": name,
+                "coupon_link": cell(row[col["link"]]),
+                "coin_reward": int(coin.group(1)) if coin else 0,
+                "quota": quota,
+                "weight": 0.0,               # 下面統一分配
+                "spend_threshold": None if threshold == "X" else threshold,
+                "terms": cell(row[col["terms"]]),
+                "expiry_note": cell(row[col["expiry"]]) if col["expiry"] is not None else None,
+                "owner": cell(row[col["owner"]]) if col["owner"] is not None else None,
+            })
+    return prizes
 
-    # 套用權重：明確指定的照給，同等級剩餘的平均分給未指定者。
+
+def apply_weights(prizes):
     for tier in (1, 3, 5):
         group = [p for p in prizes if p["tier"] == tier]
         assigned = [p for p in group if p["id"] in WEIGHT_PCT]
@@ -117,25 +133,60 @@ def main():
         elif used < 100.0 - 1e-9:
             sys.exit(f"{TIER_LABEL[tier]} 機率合計只有 {used}%，且沒有可吸收剩餘的格位")
 
-    out = ROOT / "server" / "prizes.kh.json"
-    out.write_text(json.dumps(prizes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    print(f"匯入 {len(prizes)} 個高雄獎項 → {out.relative_to(ROOT)}\n")
+def assign_positions(prizes):
+    """轉盤格位順序：同一等級內先高雄後臺北，各自照 Excel 的格號。
+
+    ⚠️ 前端是用 prize id 對應中獎格，不是用 slot —— 兩館的 slot 會撞號
+    （kh-1-1 和 tpe-1-1 都是「第 1 格」）。
+    """
+    prizes.sort(key=lambda p: (p["tier"], 0 if p["hotel"] == "KH" else 1, p["slot"]))
+    for tier in (1, 3, 5):
+        for i, p in enumerate([x for x in prizes if x["tier"] == tier]):
+            p["position"] = i
+
+
+def report(prizes):
+    kh = sum(1 for p in prizes if p["hotel"] == "KH")
+    print(f"匯入 {len(prizes)} 個獎項（高雄 {kh} / 臺北 {len(prizes) - kh}）\n")
     physical_total = 0
     for tier in (1, 3, 5):
         group = [p for p in prizes if p["tier"] == tier]
+        physical = [p for p in group if not p["coin_reward"]]
+        physical_total += sum(p["quota"] for p in physical)
         total_w = sum(p["weight"] for p in group)
-        phys = [p for p in group if not p["coin_reward"]]
-        phys_rate = sum(p["weight"] for p in phys)
-        phys_qty = sum(p["quota"] for p in phys)
-        physical_total += phys_qty
-        print(f"── {TIER_LABEL[tier]}（投 {tier} 枚）· 機率合計 {total_w:g}% ──")
+        print(f"── {TIER_LABEL[tier]}（投 {tier} 枚）· {len(group)} 格 · 機率合計 {total_w:g}% ──")
         for p in group:
-            kind = "Omnichat 券" if p["coupon_link"] else (
-                f"洲遊幣 +{p['coin_reward']}（退幣重抽）" if p["coin_reward"] else "⚠ 無連結")
-            print(f"   {p['slot']}. {p['name'][:30]:<30} 名額{p['quota']:>3}  {p['weight']:>5.4g}%  {kind}")
-        print(f"   → 實體獎中獎率 {phys_rate:g}%、實體庫存 {phys_qty} 份\n")
+            mode = ("洲遊幣（退幣重抽）" if p["coin_reward"]
+                    else "Omnichat 發券" if p["claim_mode"] == "coupon"
+                    else "★ 留聯絡資訊")
+            print(f"   {p['position']:>2}. [{p['hotel']:<3}] {p['name'][:26]:<26} "
+                  f"名額{p['quota']:>3}  {p['weight']:>6.4g}%  {mode}")
+        print(f"   → 實體獎中獎率 {sum(p['weight'] for p in physical):g}%\n")
     print(f"實體獎總庫存：{physical_total} 份")
+
+    stray = [p["id"] for p in prizes if p["hotel"] == "TPE" and p["claim_mode"] != "contact"]
+    if stray:
+        print(f"⚠️ 有臺北獎項不是 contact 模式：{stray}")
+
+
+def main():
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_SRC
+    if not src.exists():
+        sys.exit(f"找不到檔案：{src}")
+
+    rows = list(openpyxl.load_workbook(src, data_only=True)["獎項一覽表"]
+                .iter_rows(values_only=True))
+    prizes = read_prizes(rows)
+    apply_weights(prizes)
+    assign_positions(prizes)
+
+    out = ROOT / "server" / "prizes.json"
+    out.write_text(json.dumps(prizes, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (ROOT / "server" / "prizes.kh.json").unlink(missing_ok=True)   # 舊的單館檔已淘汰
+
+    report(prizes)
+    print(f"\n→ {out.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
