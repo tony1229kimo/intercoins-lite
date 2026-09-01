@@ -13,8 +13,9 @@ export const SOCIAL = {
   // ⚠️ 這兩個網址沿用原型草稿，上線前請行銷確認是官方帳號本人。
   ig_tpe: "https://www.instagram.com/intercontinental_taipei/",
   fb_tpe: "https://www.facebook.com/ICTaipei/",
-  ig_shiyu: null, // TODO 行銷提供「食遇」官方 Instagram 後填入，填了自動多 1 枚
-  fb_shiyu: null, // TODO 行銷提供「食遇」官方 Facebook 後填入，填了自動多 1 枚
+  // 高雄洲際「食遇 TASTE」（Tony 2026-09-01 提供）
+  ig_shiyu: "https://www.instagram.com/taste_ickaohsiung/",
+  fb_shiyu: "https://www.facebook.com/profile.php?id=61577973899822",
 };
 
 export const TASKS = [
