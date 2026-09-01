@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<title>洲遊幣 Lite · 後台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gold:#935D08; --gold-lt:#B8923E; --ink:#2B2620; --muted:#6B665B;
+  --surface:#FFFFFF; --bg:#F5F3EE; --line:#E4E0D8; --danger:#B14A4A; --ok:#3F7D58;
+  --serif:"Noto Serif TC",Georgia,serif; --sans:"Inter","Noto Sans TC",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.6}
+a{color:var(--gold)}
+
+/* ── 登入 ── */
+#login{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+#login .box{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;padding:32px 26px;text-align:center;box-shadow:0 12px 40px rgba(43,38,32,.1)}
+#login h1{font-family:var(--serif);font-size:20px;letter-spacing:2px;margin-bottom:4px}
+#login .sub{font-size:11px;color:var(--muted);letter-spacing:2px;margin-bottom:22px}
+input,select{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 13px;
+  font-size:15px;font-family:inherit;color:var(--ink);background:#fff}
+input:focus,select:focus{outline:none;border-color:var(--gold)}
+button{font-family:inherit;cursor:pointer}
+.btn{width:100%;margin-top:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;
+  padding:12px;font-size:15px;letter-spacing:2px}
+.btn:active{transform:scale(.99)}
+.btn.ghost{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+.err{color:var(--danger);font-size:12.5px;margin-top:10px;min-height:18px}
+
+/* ── 主體 ── */
+#app{display:none;max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+header h1{font-family:var(--serif);font-size:21px;letter-spacing:1px}
+header .env{font-size:11px;color:var(--muted)}
+header .spacer{flex:1}
+#logout{background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:16px 0 20px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.stat .k{font-size:11px;color:var(--muted);letter-spacing:.5px}
+.stat .v{font-family:var(--serif);font-size:26px;font-weight:600;margin-top:2px}
+.stat .v small{font-size:13px;color:var(--muted);font-weight:400}
+.stat.warn .v{color:var(--danger)}
+
+nav{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto}
+nav button{background:none;border:none;padding:10px 14px;font-size:14px;color:var(--muted);
+  border-bottom:2px solid transparent;white-space:nowrap}
+nav button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--gold);font-weight:600}
+
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar input,.toolbar select{width:auto;flex:1;min-width:150px;padding:8px 11px;font-size:13.5px}
+.toolbar button{padding:8px 14px;font-size:13px;border-radius:8px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink)}
+.toolbar .count{font-size:12.5px;color:var(--muted);margin-left:auto}
+
+.tablewrap{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:600;font-size:11.5px;letter-spacing:.5px;color:var(--muted);
+  padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;background:#FAF9F6}
+td{padding:10px 12px;border-bottom:1px solid #F0EDE6;vertical-align:top}
+tr:last-child td{border-bottom:none}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.pill{display:inline-block;border-radius:999px;padding:2px 9px;font-size:11px;white-space:nowrap}
+.pill.kh{background:#EFE7D6;color:#7A5B12}
+.pill.tpe{background:#E2E8EE;color:#37536E}
+.pill.ok{background:#E3F0E8;color:var(--ok)}
+.pill.no{background:#F6E3E3;color:var(--danger)}
+.pill.zero{background:#EFEDE8;color:var(--muted)}
+.empty{padding:34px;text-align:center;color:var(--muted);font-size:13.5px}
+.bar{height:5px;background:#EFEDE8;border-radius:3px;overflow:hidden;margin-top:4px;min-width:70px}
+.bar i{display:block;height:100%;background:var(--gold-lt)}
+.hint{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7}
+@media(max-width:560px){ .stat .v{font-size:22px} th,td{padding:8px 9px} }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="box">
+    <div class="sub">I N T E R C O I N S</div>
+    <h1>洲遊幣 Lite 後台</h1>
+    <div class="sub" style="margin-bottom:20px">請輸入您的後台帳號</div>
+    <input id="usr" type="text" placeholder="帳號" autocomplete="username" style="margin-bottom:10px" />
+    <input id="pwd" type="password" placeholder="密碼" autocomplete="current-password" />
+    <button class="btn" id="go">進 入</button>
+    <div class="hint" style="margin-top:14px;font-size:11.5px">本頁含中獎者個人資料，僅限授權人員使用；<br>每次調閱都會留下紀錄。</div>
+    <div class="err" id="loginerr"></div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <h1>洲遊幣 Lite 後台</h1>
+    <span class="env" id="env"></span>
+    <span class="spacer"></span>
+    <button id="logout">登出</button>
+  </header>
+
+  <div class="cards" id="stats"></div>
+
+  <nav role="tablist">
+    <button role="tab" data-tab="contacts" aria-selected="true">臺北待聯繫</button>
+    <button role="tab" data-tab="winners">中獎名單</button>
+    <button role="tab" data-tab="prizes">獎項與庫存</button>
+  </nav>
+
+  <div id="pane"></div>
+</div>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const KEY = 'ic_admin_token', KEY_U = 'ic_admin_user';
+let TOKEN = sessionStorage.getItem(KEY) || '';
+let USER  = sessionStorage.getItem(KEY_U) || '';
+let TAB = 'contacts';
+let CACHE = {};
+
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = t => t ? new Date(t).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+
+async function api(path){
+  const r = await fetch('/api/admin' + path, { headers:{ Authorization:'Bearer ' + TOKEN } });
+  if(r.status === 401) throw Object.assign(new Error('密碼錯誤'), { auth:true });
+  if(r.status === 503) throw new Error('後台尚未啟用（Zeabur 未設定 ADMIN_TOKEN）');
+  if(!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+/* ── 登入 ── */
+async function login(){
+  const u = $('#usr').value.trim(), p = $('#pwd').value;
+  if(!u || !p){ $('#loginerr').textContent = '請輸入帳號與密碼'; return; }
+  $('#loginerr').textContent = '驗證中…';
+  try{
+    const r = await fetch('/api/admin/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username:u, password:p }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    // 密碼不留在瀏覽器，只留伺服器推導出的 token
+    TOKEN = d.token; USER = d.username;
+    sessionStorage.setItem(KEY, TOKEN); sessionStorage.setItem(KEY_U, USER);
+    $('#login').style.display = 'none';
+    $('#app').style.display = 'block';
+    load();
+  }catch(e){
+    TOKEN = ''; $('#loginerr').textContent = e.message;
+  }
+}
+$('#go').addEventListener('click', login);
+$('#pwd').addEventListener('keydown', e => { if(e.key === 'Enter') login(); });
+$('#usr').addEventListener('keydown', e => { if(e.key === 'Enter') $('#pwd').focus(); });
+$('#logout').addEventListener('click', () => {
+  sessionStorage.removeItem(KEY); sessionStorage.removeItem(KEY_U); location.reload();
+});
+
+/* ── 載入全部資料 ── */
+async function load(){
+  try{
+    const [stats, contacts, prizes, winners] = await Promise.all([
+      api('/stats'), api('/contacts'), api('/prizes'), api('/winners'),
+    ]);
+    CACHE = { stats, contacts, prizes, winners };
+    renderStats();
+    render();
+  }catch(e){
+    if(e.auth){ sessionStorage.removeItem(KEY); location.reload(); return; }
+    $('#pane').innerHTML = '<div class="tablewrap"><div class="empty">載入失敗：' + esc(e.message) + '</div></div>';
+  }
+}
+
+function renderStats(){
+  const s = CACHE.stats, c = CACHE.contacts;
+  const spins = (s.draws || []).reduce((a, d) => a + d.spins, 0);
+  $('#stats').innerHTML = [
+    ['參加人數', s.players],
+    ['抽獎次數', spins],
+    ['已發出洲遊幣', s.coinsIssued],
+    ['未使用洲遊幣', s.coinsOutstanding],
+    ['臺北待聯繫', c.pending, c.pending > 0],
+    ['推播失敗', s.push.failed, s.push.failed > 0],
+  ].map(([k, v, warn]) =>
+    `<div class="stat${warn ? ' warn' : ''}"><div class="k">${k}</div><div class="v">${v ?? 0}</div></div>`
+  ).join('');
+  $('#env').textContent = (USER ? USER + ' · ' : '') + '共 ' + spins + ' 次抽獎 · '
+    + (s.push.claimed || 0) + ' 張券已領取';
+}
+
+/* ── 分頁 ── */
+document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
+  TAB = b.dataset.tab;
+  document.querySelectorAll('nav button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+  render();
+}));
+
+function render(){
+  if(TAB === 'contacts') renderContacts();
+  else if(TAB === 'winners') renderWinners();
+  else renderPrizes();
+}
+
+/* ── 臺北待聯繫 ── */
+function renderContacts(){
+  const rows = CACHE.contacts.winners || [];
+  $('#pane').innerHTML = `
+    <div class="toolbar">
+      <input id="q" placeholder="搜尋姓名 / 手機 / Email / 獎品 / 兌換碼" />
+      <select id="f"><option value="">全部</option><option value="pending">只看未填聯絡資訊</option><option value="filled">只看已填</option></select>
+      <button id="csv">下載中獎名單 CSV</button>
+      <span class="count" id="cnt"></span>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>中獎時間</th><th>等級</th><th>獎品</th><th>兌換碼</th>
+        <th>姓名</th><th>手機</th><th>Email</th><th>方便時段</th><th>狀態</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table></div>
+    <div class="hint">臺北洲際的獎項不發 Omnichat 券，改由專人聯繫。<b>「未填」代表中獎者關掉表單還沒補</b> ——
+      他下次進遊戲時系統會自動再問一次，不需要人工催。</div>`;
+
+  const draw = () => {
+    const q = $('#q').value.trim().toLowerCase();
+    const f = $('#f').value;
+    const list = rows.filter(r => {
+      if(f === 'pending' && r.name) return false;
+      if(f === 'filled' && !r.name) return false;
+      if(!q) return true;
+      return [r.name, r.phone, r.email, r.prize_name, r.code].some(v => String(v ?? '').toLowerCase().includes(q));
+    });
+    $('#cnt').textContent = list.length + ' / ' + rows.length + ' 筆';
+    $('#tb').innerHTML = list.length ? list.map(r => `<tr>
+      <td class="mono">${fmt(r.created_at)}</td>
+      <td>${esc(r.label)}</td>
+      <td>${esc(r.prize_name)}</td>
+      <td class="mono">${esc(r.code)}</td>
+      <td>${esc(r.name)}</td>
+      <td class="mono">${esc(r.phone)}</td>
+      <td class="mono">${esc(r.email)}</td>
+      <td>${esc(r.contact_window)}</td>
+      <td>${r.name ? '<span class="pill ok">已填</span>' : '<span class="pill no">未填</span>'}</td>
+    </tr>`).join('') : '<tr><td colspan="9"><div class="empty">目前沒有符合條件的資料</div></td></tr>';
+  };
+  $('#q').addEventListener('input', draw);
+  $('#f').addEventListener('change', draw);
+  $('#csv').addEventListener('click', downloadCsv);
+  draw();
+}
+
+/* ── 中獎名單 ──
+   兩館共用一份、用館別篩選 —— 高雄櫃檯要能查客人手上的券是不是自家發的，
+   臺北的人要知道該聯繫誰，所以不拆成兩份名單（Tony 2026-09-01）。 */
+function renderWinners(){
+  const rows = CACHE.winners.winners || [];
+  $('#pane').innerHTML = `
+    <div class="toolbar">
+      <input id="q" placeholder="搜尋姓名 / 手機 / Email / 獎品 / 兌換碼 / LINE 名稱" />
+      <select id="h"><option value="">兩館全部</option><option value="KH">只看高雄洲際</option><option value="TPE">只看臺北洲際</option></select>
+      <select id="k"><option value="">所有獎項</option><option value="real">只看實體獎</option><option value="coin">只看洲遊幣</option><option value="unclaimed">實體獎・尚未領取</option></select>
+      <button id="csv">下載 CSV</button>
+      <span class="count" id="cnt"></span>
+    </div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>時間</th><th>館別</th><th>等級</th><th>獎品</th><th>兌換碼</th>
+        <th>中獎者</th><th>手機</th><th>Email</th><th>領獎方式</th><th>狀態</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table></div>
+    <div class="hint">
+      <b>館別</b>＝這個獎是哪一家飯店提供的，客人是同一個轉盤抽的，兩館都看得到彼此的中獎紀錄。<br>
+      <b>高雄的獎</b>：券已推到客人 LINE，狀態顯示券有沒有被領走 —— 櫃檯核銷時可對兌換碼。<br>
+      <b>臺北的獎</b>：不發券，狀態顯示中獎者有沒有留下聯絡資訊，由臺北洲際的人主動聯繫。
+    </div>`;
+
+  const draw = () => {
+    const q = $('#q').value.trim().toLowerCase();
+    const h = $('#h').value, k = $('#k').value;
+    const list = rows.filter(r => {
+      if(h && r.hotel !== h) return false;
+      if(k === 'real' && r.coin) return false;
+      if(k === 'coin' && !r.coin) return false;
+      if(k === 'unclaimed'){
+        if(r.coin) return false;
+        if(r.claimMode === 'contact' ? r.contactFilled : r.claimedAt) return false;
+      }
+      if(!q) return true;
+      return [r.name, r.phone, r.email, r.prize, r.code, r.lineName]
+        .some(v => String(v ?? '').toLowerCase().includes(q));
+    });
+    $('#cnt').textContent = list.length + ' / ' + rows.length + ' 筆';
+    $('#tb').innerHTML = list.length ? list.map(r => {
+      let status;
+      if(r.coin) status = '<span class="pill zero">直接入帳</span>';
+      else if(r.claimMode === 'contact')
+        status = r.contactFilled ? '<span class="pill ok">已留聯絡資訊</span>'
+                                 : '<span class="pill no">待客人填寫</span>';
+      else if(r.claimedAt) status = '<span class="pill ok">券已領取</span>';
+      else if(!r.pushed) status = '<span class="pill no">推播失敗</span>';
+      else status = '<span class="pill zero">券未領取</span>';
+      return `<tr>
+        <td class="mono">${fmt(r.at)}</td>
+        <td><span class="pill ${r.hotel === 'KH' ? 'kh' : 'tpe'}">${r.hotel === 'KH' ? '高雄' : '臺北'}</span></td>
+        <td>${esc(r.label)}</td>
+        <td>${esc(r.prize)}</td>
+        <td class="mono">${esc(r.code)}</td>
+        <td>${esc(r.name || r.lineName)}</td>
+        <td class="mono">${esc(r.phone)}</td>
+        <td class="mono">${esc(r.email)}</td>
+        <td>${r.coin ? '洲遊幣' : r.claimMode === 'contact' ? '<b>專人聯繫</b>' : 'Omnichat 券'}</td>
+        <td>${status}</td>
+      </tr>`;
+    }).join('') : '<tr><td colspan="10"><div class="empty">目前沒有符合條件的資料</div></td></tr>';
+  };
+  ['q','h','k'].forEach(id => $('#'+id).addEventListener(id === 'q' ? 'input' : 'change', draw));
+  $('#csv').addEventListener('click', downloadCsv);
+  draw();
+}
+
+/* ── 獎項與庫存 ── */
+function renderPrizes(){
+  const tiers = CACHE.prizes.tiers || [];
+  $('#pane').innerHTML = tiers.map(t => `
+    <div class="toolbar" style="margin-top:14px"><b>${esc(t.label)}</b>
+      <span class="count">${t.open ? '開放中' : '已全數發完 → 抽到會顯示銘謝惠顧'}</span></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>館別</th><th>獎品</th><th>領獎方式</th><th>機率</th><th>名額</th><th>已發出</th><th>剩餘</th></tr></thead>
+      <tbody>${t.prizes.map(p => {
+        const pct = p.quota ? Math.min(100, p.issued / p.quota * 100) : 0;
+        const out = p.quota && p.issued >= p.quota;
+        return `<tr>
+          <td><span class="pill ${p.hotel === 'KH' ? 'kh' : 'tpe'}">${p.hotel === 'KH' ? '高雄' : '臺北'}</span></td>
+          <td>${esc(p.name)}</td>
+          <td>${p.coin_reward ? '洲遊幣入帳'
+              : p.claim_mode === 'contact' ? '<b>留聯絡資訊</b>' : 'Omnichat 發券'}</td>
+          <td>${p.pct ? p.pct + '%' : '<span class="pill zero">0%</span>'}</td>
+          <td>${p.quota || '不限'}</td>
+          <td>${p.issued}<div class="bar"><i style="width:${pct}%"></i></div></td>
+          <td>${p.remaining === null ? '—' : out ? '<span class="pill no">已發完</span>' : p.remaining}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`).join('') +
+    `<div class="hint">機率是同一等級內跨館一起分配到 100%。要調整機率或名額，
+      可直接改 <span class="mono">scripts/import-prizes.py</span> 後重新部署，
+      或呼叫 <span class="mono">PATCH /api/admin/prizes/:id</span>（改完立即生效，不用重新部署）。</div>`;
+}
+
+/* ── CSV 下載（帶 token，所以不能用純 <a href>）── */
+async function downloadCsv(){
+  const r = await fetch('/api/admin/winners.csv', { headers:{ Authorization:'Bearer ' + TOKEN } });
+  if(!r.ok){ alert('下載失敗：HTTP ' + r.status); return; }
+  const blob = await r.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'intercoins-winners-' + new Date().toISOString().slice(0,10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/* ── 開機：有存過密碼就直接進 ── */
+if(TOKEN){
+  $('#login').style.display = 'none';
+  $('#app').style.display = 'block';
+  load();
+}else{
+  $('#usr').focus();
+}
+</script>
+</body>
+</html>

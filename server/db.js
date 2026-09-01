@@ -150,6 +150,17 @@ CREATE TABLE IF NOT EXISTS prize_contacts (
 );
 CREATE INDEX IF NOT EXISTS prize_contacts_user_idx ON prize_contacts (line_user_id);
 
+-- 後台存取稽核：誰、什麼時候、看了哪一份含個資的名單。
+-- 中獎名單有中獎者的姓名/手機/Email，出事要查得出是誰調閱的。
+CREATE TABLE IF NOT EXISTS admin_access_log (
+  id         BIGSERIAL   PRIMARY KEY,
+  username   TEXT        NOT NULL,
+  action     TEXT        NOT NULL,      -- winners / winners.csv / contacts
+  ip         TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS admin_access_log_idx ON admin_access_log (created_at DESC);
+
 -- 個資同意（活動條款「填寫資料領取洲遊幣」）
 CREATE TABLE IF NOT EXISTS player_profiles (
   line_user_id    TEXT PRIMARY KEY REFERENCES players(line_user_id) ON DELETE CASCADE,

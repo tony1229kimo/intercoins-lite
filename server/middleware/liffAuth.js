@@ -56,13 +56,3 @@ export function requireLiffAuth() {
     }
   };
 }
-
-/** 後台 API 保護：Authorization: Bearer <ADMIN_TOKEN>，或 ?token= */
-export function requireAdmin(req, res, next) {
-  const expected = process.env.ADMIN_TOKEN;
-  if (!expected) return res.status(503).json({ error: "ADMIN_TOKEN 未設定，後台停用" });
-  const header = req.header("authorization") || "";
-  const provided = header.startsWith("Bearer ") ? header.slice(7).trim() : req.query.token;
-  if (provided !== expected) return res.status(401).json({ error: "unauthorized" });
-  next();
-}

@@ -95,7 +95,7 @@ Flex 訊息裡的 `/api/claim/:token` 指到錯誤 host 而 404（POSTMORTEM Bug
 | `LINE_MESSAGING_ACCESS_TOKEN_KH` | 加好友 gate 失效（全部放行）＋ **中獎券推不出去** |
 | `PUBLIC_BASE_URL` | Flex 領取按鈕沒有連結，客人領不到獎 |
 | `DATABASE_URL` | 只剩靜態頁，遊戲不能玩（Zeabur 綁 PostgreSQL 會自動注入） |
-| `ADMIN_TOKEN` | 後台 API 停用（其他功能正常） |
+| `ADMIN_USERS` | 後台 `/admin` 沒人進得去（遊戲本身正常）。格式 `帳號:密碼,帳號:密碼` |
 
 > ⚠️ `/api/health` 的 `*_configured: true` 只代表**環境變數非空**，不代表 key 有效（踩雷 T09）。
 > 真要驗證得實際跑一次會呼叫該服務的操作。
@@ -143,23 +143,52 @@ Excel 的機率欄已被行銷移除，權重改由 `scripts/import-prizes.py` �
 
 ---
 
-## 後台
+## 後台 `/admin`
+
+**https://intercoins.ictaiwan.net/admin** —— 用瀏覽器開，帳號密碼登入，不用打 curl。
+
+三個分頁：
+
+| 分頁 | 內容 |
+|---|---|
+| **臺北待聯繫** | 中了臺北獎項的人。可搜尋、可只看「未填聯絡資訊」的。臺北洲際的人照這份聯繫 |
+| **中獎名單** | **兩館共用一份**，可依館別／獎項類型篩選。高雄櫃檯查客人手上的券是不是自家發的、臺北的人查該聯繫誰，都在這裡。可下載 CSV |
+| **獎項與庫存** | 每個獎品的實際機率、名額、已發出、剩餘。哪一等級發完了一眼看得出來 |
+
+### 誰能進去 —— 個人帳號，不是共用密碼
+
+名單裡有中獎者的**姓名／手機／Email**，所以刻意不用一組共用密碼：
+
+```
+ADMIN_USERS=tony:密碼A,alisha:密碼B,katniss:密碼C
+```
+
+- 帳號不分大小寫，密碼區分；多組用逗號分隔。**密碼裡不能有逗號或冒號**
+- 要移除某個人 → 從這串拿掉他那組，重新部署即可，**其他人不受影響**
+- 每次調閱名單都會寫進 `admin_access_log`（誰、什麼時候、看了哪一份、來源 IP）
+- 密碼不會存進瀏覽器 —— 登入後只保留伺服器推導出的 token，關掉分頁就失效
+
+`ADMIN_TOKEN` 保留為主金鑰，給 curl／自動化用（稽核會記成使用者 `master`）。
+兩個都沒設 → 後台整個停用（回 503）。
+
+### API（要帶 token）
 
 ```bash
-# 獎項、庫存、實際機率
-curl -H "Authorization: Bearer $ADMIN_TOKEN" https://intercoins.ictaiwan.net/api/admin/prizes
+# 登入取得 token
+curl -X POST https://intercoins.ictaiwan.net/api/admin/login   -H "Content-Type: application/json" -d '{"username":"tony","password":"..."}'
 
-# 營運總覽（玩家數、發幣數、各等級抽獎次數、推播成功率）
-curl -H "Authorization: Bearer $ADMIN_TOKEN" https://intercoins.ictaiwan.net/api/admin/stats
+# 之後都帶 Authorization: Bearer <token>
+curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/winners    # 完整中獎名單
+curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/contacts   # 臺北待聯繫
+curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/prizes     # 獎項與庫存
+curl -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/stats      # 營運總覽
+curl -H "Authorization: Bearer $T" -O https://intercoins.ictaiwan.net/api/admin/winners.csv
 
-# 中獎名單 CSV（UTF-8 BOM，Excel 直接開）
-curl -H "Authorization: Bearer $ADMIN_TOKEN" -O https://intercoins.ictaiwan.net/api/admin/winners.csv
-
-# 臺北待聯繫名單（給臺北洲際的人跟進）
-curl -H "Authorization: Bearer $ADMIN_TOKEN" https://intercoins.ictaiwan.net/api/admin/contacts
+# 改機率／名額（立即生效，不用重新部署）
+curl -X PATCH https://intercoins.ictaiwan.net/api/admin/prizes/kh-5-1   -H "Authorization: Bearer $T" -H "Content-Type: application/json" -d '{"weight": 5}'
 
 # 推播失敗的補送
-curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://intercoins.ictaiwan.net/api/admin/draws/123/repush
+curl -X POST -H "Authorization: Bearer $T" https://intercoins.ictaiwan.net/api/admin/draws/123/repush
 ```
 
 ---

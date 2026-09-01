@@ -4,19 +4,45 @@
  */
 import { asyncRouter } from "../lib/router.js";
 import { query } from "../db.js";
-import { requireAdmin } from "../middleware/liffAuth.js";
+import { requireAdmin, tokenFor, adminUsers, adminEnabled } from "../middleware/adminAuth.js";
 import { pushRewardCoupon } from "../lib/line.js";
 import { TIER_LABEL } from "../prizes.js";
 
 const router = asyncRouter();
+
+/** 帳密登入 → 換取 token。密碼只在這一次進出，之後都用推導出的 token。 */
+router.post("/login", async (req, res) => {
+  if (!adminEnabled()) {
+    return res.status(503).json({ error: "後台停用：ADMIN_USERS 與 ADMIN_TOKEN 都沒設定" });
+  }
+  const username = String(req.body?.username ?? "").trim().toLowerCase();
+  const password = String(req.body?.password ?? "");
+  if (!username || !password) return res.status(400).json({ error: "缺少帳號或密碼" });
+
+  const token = tokenFor(username, password);
+  const hit = adminUsers().find((u) => u.username === username && u.token === token);
+  if (!hit) return res.status(401).json({ error: "帳號或密碼錯誤" });
+
+  await logAccess(username, "login", req).catch(() => {});
+  res.json({ ok: true, username, token });
+});
+
 router.use(requireAdmin);
+
+/** 留下「誰查了含個資的名單」。寫入失敗不影響查詢本身。 */
+async function logAccess(username, action, req) {
+  await query(
+    "INSERT INTO admin_access_log (username, action, ip) VALUES ($1, $2, $3)",
+    [username, action, (req.headers["x-forwarded-for"] || req.ip || "").toString().slice(0, 60)],
+  );
+}
 
 /** 獎項與庫存總表（含機率，僅後台可見）。 */
 router.get("/prizes", async (_req, res) => {
   const { rows } = await query(
-    `SELECT id, hotel, tier, slot, name, quota, issued, weight, coin_reward,
-            visible, active, coupon_link IS NOT NULL AS has_link
-       FROM prizes ORDER BY tier, slot`,
+    `SELECT id, hotel, tier, slot, position, name, claim_mode, quota, issued,
+            weight, coin_reward, visible, active, coupon_link IS NOT NULL AS has_link
+       FROM prizes ORDER BY tier, position`,
   );
   const byTier = {};
   for (const r of rows) {
@@ -84,9 +110,14 @@ router.get("/stats", async (_req, res) => {
   });
 });
 
-/** 中獎名單 CSV（UTF-8 BOM，Excel 直接開得起來）。
- *  臺北的獎（claim_mode='contact'）不發券，靠這份名單的聯絡資訊由專人聯繫。 */
-router.get("/winners.csv", async (_req, res) => {
+/**
+ * 中獎名單的共用查詢。
+ *
+ * 兩館的人需要「互相核對誰中了誰家的獎」（Tony 2026-09-01）：
+ * 高雄的櫃檯要知道客人手上那張券是不是自家發的、臺北的人要知道該聯繫誰，
+ * 所以名單是【跨館一份】，用 hotel 欄位分辨，不拆成兩份。
+ */
+async function fetchWinners() {
   const { rows } = await query(
     `SELECT d.id, d.created_at, d.hotel, d.tier, d.prize_name, d.code, d.coin_reward,
             d.pushed, d.push_error, d.claim_used_at,
@@ -102,6 +133,44 @@ router.get("/winners.csv", async (_req, res) => {
   LEFT JOIN player_profiles pr ON pr.line_user_id = d.line_user_id
       ORDER BY d.created_at DESC`,
   );
+  return rows;
+}
+
+/** 完整中獎名單（JSON）—— 後台頁面用，兩館共用一份、可依館別篩選。 */
+router.get("/winners", async (req, res) => {
+  await logAccess(req.adminUser, "winners", req).catch(() => {});
+  const rows = await fetchWinners();
+  res.json({
+    total: rows.length,
+    winners: rows.map((r) => ({
+      id: r.id,
+      at: r.created_at,
+      hotel: r.hotel,
+      tier: r.tier,
+      label: TIER_LABEL[r.tier],
+      prize: r.prize_name,
+      code: r.code,
+      coin: r.coin_reward,
+      claimMode: r.claim_mode,
+      // 聯絡資訊優先用中獎當下留的，沒有就退回會員填過的個人資料
+      name: r.contact_name || r.profile_name || null,
+      phone: r.contact_phone || r.profile_phone || null,
+      email: r.contact_email || r.profile_email || null,
+      contactWindow: r.contact_window,
+      contactFilled: Boolean(r.contact_name),
+      lineName: r.display_name,
+      lineUserId: r.line_user_id,
+      pushed: r.pushed,
+      pushError: r.push_error,
+      claimedAt: r.claim_used_at,
+    })),
+  });
+});
+
+/** 中獎名單 CSV（UTF-8 BOM，Excel 直接開得起來）。 */
+router.get("/winners.csv", async (req, res) => {
+  await logAccess(req.adminUser, "winners.csv", req).catch(() => {});
+  const rows = await fetchWinners();
   const head = ["中獎編號", "時間", "館別", "等級", "獎品", "領獎方式", "兌換碼", "洲遊幣",
                 "已推播", "推播錯誤", "券已領取",
                 "聯絡姓名", "聯絡手機", "聯絡Email", "方便聯繫時段", "聯絡資訊已填",
@@ -128,7 +197,8 @@ router.get("/winners.csv", async (_req, res) => {
 });
 
 /** 臺北待聯繫名單 —— 中了臺北的獎、已留聯絡資訊、還沒處理的。給臺北洲際的人用。 */
-router.get("/contacts", async (_req, res) => {
+router.get("/contacts", async (req, res) => {
+  await logAccess(req.adminUser, "contacts", req).catch(() => {});
   const { rows } = await query(
     `SELECT d.id AS draw_id, d.created_at, d.prize_name, d.code, d.tier,
             c.name, c.phone, c.email, c.contact_window, c.created_at AS filled_at

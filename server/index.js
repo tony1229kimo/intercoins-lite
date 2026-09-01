@@ -106,6 +106,14 @@ app.use(express.static(PUBLIC_DIR, {
     }
   },
 }));
+// 後台頁面。頁面本身沒有任何資料 —— 所有內容都要帶 ADMIN_TOKEN 打 /api/admin/*
+// 才拿得到，所以靜態檔公開沒關係。
+app.get("/admin", (_req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  res.setHeader("Cache-Control", "no-store");
+  res.sendFile(join(PUBLIC_DIR, "admin.html"));
+});
+
 app.get("*", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
 
 // 統一錯誤處理。POSTMORTEM Bug #3 的教訓：不要把所有錯誤吞成同一個誤導訊息，
