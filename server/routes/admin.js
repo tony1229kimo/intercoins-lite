@@ -196,7 +196,6 @@ router.get("/winners.csv", async (req, res) => {
   res.send("﻿" + [head.map(esc).join(","), ...body].join("\r\n"));
 });
 
-/** 臺北待聯繫名單 —— 中了臺北的獎、已留聯絡資訊、還沒處理的。給臺北洲際的人用。 */
 /**
  * 待聯繫名單 —— claim_mode='contact' 的中獎紀錄。
  * ⚠️ 不是只有臺北：高雄的兩項住宿大獎（kh-5-1 / kh-5-2）也走這裡，
