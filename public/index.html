@@ -1093,14 +1093,41 @@ async function initLiff(){
       +'<button style="'+OV_BTN+'" onclick="location.reload()">重新載入</button>');
   }
 }
-/* 密碼閘只留給「還沒設 LIFF」的內部預覽。正式上線（有 LIFF_ID）時真正的門檻是
+/* ---------- 開機 ----------
+   ⚠️ 「不在 LINE 裡 → 導去 LINE App」這件事必須在【開場影片之前】判斷。
+   放在 initLiff() 裡的話，客人要先等整段開場影片播完才被導走 —— 順序反了，
+   而且很多人會在那之前就關掉。所以這裡先做一次輕量的 liff.init() 探路。
+
+   密碼閘只留給「還沒設 LIFF」的內部預覽。正式上線（有 LIFF_ID）時真正的門檻是
    LINE 登入 + 加好友，不該再叫客人輸入密碼。 */
-if(LIFF_ID || sessionStorage.getItem(ACCESS_SESSION_KEY)==='1'){
-  grantAccess();
-}else if(sessionStorage.getItem(INTRO_KEY)!=='1' && !prefersReduced()){
-  // 停在密碼閘且開場影片將播 → 趁使用者輸入密碼時預先緩衝(faststart 少量即可起播)
-  try{ $('#intro-video').load(); }catch(e){}
-}
+(async function boot(){
+  if(LIFF_ID){
+    // 先把密碼閘藏起來，避免探路期間閃過一格密碼畫面
+    const gate=$('#access-gate'); if(gate) gate.hidden=true;
+    if(window.liff){
+      overlay('<p style="font:400 15px/1.8 sans-serif;color:#CDBFA6">正在開啟…</p>');
+      try{
+        await liff.init({ liffId: LIFF_ID });
+        if(!liff.isInClient() && !sessionStorage.getItem(LIFF_REDIRECT_KEY)){
+          sessionStorage.setItem(LIFF_REDIRECT_KEY, '1');
+          location.replace(LIFF_URL);
+          return;                    // 直接離開，不要再跑開場影片
+        }
+      }catch(e){
+        console.warn('[LIFF] 探路失敗，改走原流程:', e && e.message);
+      }
+      hideOverlay();
+    }
+    grantAccess();
+    return;
+  }
+  if(sessionStorage.getItem(ACCESS_SESSION_KEY)==='1'){
+    grantAccess();
+  }else if(sessionStorage.getItem(INTRO_KEY)!=='1' && !prefersReduced()){
+    // 停在密碼閘且開場影片將播 → 趁使用者輸入密碼時預先緩衝(faststart 少量即可起播)
+    try{ $('#intro-video').load(); }catch(e){}
+  }
+})();
 $('#access-form').addEventListener('submit',e=>{
   e.preventDefault();
   const field=$('#access-password'), error=$('#access-error');
