@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-visual">
 <title>洲遊幣 Lite · InterCoins</title>
-<link rel="icon" type="image/png" href="assets/coin.png">
+<link rel="icon" type="image/png" href="assets/coin.webp">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Noto+Serif+TC:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- LINE LIFF SDK：在 LINE App 內以 LIFF 開啟時提供真實登入身分（getProfile / getIDToken） -->
@@ -376,7 +376,7 @@ img.li-av{background:none}
   filter:drop-shadow(0 10px 22px rgba(0,0,0,.5))}
 .reward.show .reward-coin{animation:rewardSpin 1s cubic-bezier(.2,.85,.2,1) forwards}
 .rc-face{position:absolute;inset:0;border-radius:50%;backface-visibility:hidden;
-  background:center/contain no-repeat url('assets/coin.png')}
+  background:center/contain no-repeat url('assets/coin.webp')}
 .rc-face.back{transform:rotateY(180deg)}
 @keyframes rewardSpin{from{transform:rotateY(0) scale(.3);opacity:0}to{transform:rotateY(360deg) scale(1);opacity:1}}
 .reward-text{font-family:var(--serif);font-weight:var(--w-display);font-size:var(--t-title);color:#f4d489;letter-spacing:.03em;
@@ -438,7 +438,7 @@ img.li-av{background:none}
 
 /* 訪客入口：公開原型的輕量存取門檻（正式保護應改由後端驗證） */
 #access-gate{position:fixed;inset:0;z-index:var(--z-gate);display:flex;align-items:center;justify-content:center;
-  padding:24px;background:linear-gradient(rgba(31,27,20,.56),rgba(31,27,20,.72)),url('assets/bg.png') center/cover}
+  padding:24px;background:linear-gradient(rgba(31,27,20,.56),rgba(31,27,20,.72)),url('assets/bg.webp') center/cover}
 #access-gate[hidden],#app[hidden]{display:none}
 .access-panel{width:min(100%,360px);padding:34px 26px 28px;text-align:center;color:#fff;
   background:rgba(43,38,32,.94);border:1px solid rgba(233,201,138,.55);border-radius:16px;
@@ -515,21 +515,21 @@ img.li-av{background:none}
         <span class="li-name" id="li-name">預覽訪客</span>
         <span class="li-tag" id="li-tag">示意</span>
       </div>
-      <div class="balance"><img src="assets/coin.png" alt="洲遊幣" width="24" height="24"><b id="bal-wheel">0</b><span>洲遊幣</span></div>
+      <div class="balance"><img src="assets/coin.webp" alt="洲遊幣" width="24" height="24"><b id="bal-wheel">0</b><span>洲遊幣</span></div>
     </header>
 
     <!-- 轉盤＝主角：頂欄下方即完整現身（點等級卡會即時換金/銀/銅） -->
     <div class="stage">
       <div class="disc">
-        <img class="dl dl-bg"    id="img-bg"    src="assets/L1/disc-bg.png" alt="">
-        <img class="dl dl-tier"  id="img-tier"  src="assets/L1/disc-tier.png" alt="">
-        <img class="dl dl-orbit" id="img-orbit" src="assets/L1/disc-orbit.png" alt="">
+        <img class="dl dl-bg"    id="img-bg"    src="assets/L1/disc-bg.webp" alt="">
+        <img class="dl dl-tier"  id="img-tier"  src="assets/L1/disc-tier.webp" alt="">
+        <img class="dl dl-orbit" id="img-orbit" src="assets/L1/disc-orbit.webp" alt="">
         <div id="prize">
-          <img class="plate-img" id="img-plate" src="assets/L1/disc-plate.png" alt="獎項盤">
+          <img class="plate-img" id="img-plate" src="assets/L1/disc-plate.webp" alt="獎項盤">
         </div>
-        <img class="dl dl-dome"  id="img-dome"  src="assets/L1/disc-dome.png" alt="">
+        <img class="dl dl-dome"  id="img-dome"  src="assets/L1/disc-dome.webp" alt="">
         <div class="dl dl-labels" id="labels"></div>
-        <img class="disc-slot"   src="assets/disc-slot.png" alt="">
+        <img class="disc-slot"   src="assets/disc-slot.webp" alt="">
         <div class="wheel-glow" id="glow"></div>
         <!-- 一等獎持續發光 -->
         <div class="tier-aura" id="tier-aura"></div>
@@ -711,7 +711,7 @@ img.li-av{background:none}
     </div>
   </div>
 
-  <div class="toast" id="toast" role="status" aria-live="polite"><img src="assets/coin.png" alt=""><span id="toast-msg"></span></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"><img src="assets/coin.webp" alt=""><span id="toast-msg"></span></div>
 
   <!-- 個資送出金幣獎勵動畫 -->
   <div class="reward" id="reward">
@@ -1030,7 +1030,7 @@ function dropCoins(n, done){
   const startBal=S.balance;                            // 顯示值起點；逐枚遞減（真值由 spin 收尾 render）
   let landed=0;
   for(let i=0;i<n;i++){
-    const c=document.createElement('img'); c.src='assets/coin.png'; c.alt=''; c.className='fly-coin';
+    const c=document.createElement('img'); c.src='assets/coin.webp'; c.alt=''; c.className='fly-coin';
     c.style.left=(sx-12)+'px'; c.style.top=(sy-12)+'px'; layer.appendChild(c);
     const anim=c.animate([
       {transform:'translate(0,0) rotateZ(0) scale(1)', opacity:1, offset:0},
@@ -1213,7 +1213,7 @@ function swapLevel(tier){
   curLevel=lvl;
   const g=$('#glow');
   g.classList.add('flash');
-  setTimeout(()=>{ DISC_LAYERS.forEach(([sel,name])=>{ $(sel).src=`assets/L${lvl}/${name}.png`; }); },250);
+  setTimeout(()=>{ DISC_LAYERS.forEach(([sel,name])=>{ $(sel).src=`assets/L${lvl}/${name}.webp`; }); },250);
   setTimeout(()=>{ g.classList.remove('flash'); },500);
 }
 function applyTier(){
@@ -1445,7 +1445,7 @@ function startWinners(){ tickWinners(); clearInterval(winTimer); winTimer=setInt
 tierDeg = 60;
 { const lvl0=LEVEL_BY_TIER[TIER_BY_DEG[tierDeg]];
   if(lvl0!==curLevel){ curLevel=lvl0;                     // 初始直接換圖，不走發光轉場
-    DISC_LAYERS.forEach(([sel,name])=>{ $(sel).src=`assets/L${lvl0}/${name}.png`; }); } }
+    DISC_LAYERS.forEach(([sel,name])=>{ $(sel).src=`assets/L${lvl0}/${name}.webp`; }); } }
 applyTier();        // 設 selTier=三等獎、換 L3 圖、buildRing、refreshDraw
 renderBalance(); renderStack(); renderProfileCard(); startWinners();   // 身分晶片移左上；匿名中獎跑馬燈改頂欄下方低調文字
 renderTasks();                 // 預先渲染任務清單（含 pending 狀態）
