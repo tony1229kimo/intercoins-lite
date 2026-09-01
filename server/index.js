@@ -12,6 +12,7 @@ import { dirname, join } from "node:path";
 import { ensureSchema, hasDb, query } from "./db.js";
 import { seedPrizes } from "./prizes.js";
 import { verifyPushToken } from "./lib/line.js";
+import { TASKS, PUBLISHED_TASKS, MAX_EARNABLE } from "./lib/tasks.js";
 import gameRoutes from "./routes/game.js";
 import claimRoutes from "./routes/claim.js";
 import adminRoutes from "./routes/admin.js";
@@ -54,6 +55,15 @@ app.get("/api/health", async (req, res) => {
   if (req.query.deep) {
     // 真的打 LINE 問這把 token 有沒有效、對應到哪個官方帳號。
     out.line_push_token_verified = await verifyPushToken("KH");
+
+    // 任務清單（網址都是公開的社群連結，不涉機密）。
+    // 沒填網址的追蹤任務不會發布 —— 這裡看得出有沒有漏，也看得出每人上限幾枚幣。
+    out.tasks = {
+      published: PUBLISHED_TASKS.length,
+      maxEarnable: MAX_EARNABLE,
+      unpublished: TASKS.filter((t) => !PUBLISHED_TASKS.includes(t)).map((t) => t.id),
+      list: PUBLISHED_TASKS.map((t) => ({ id: t.id, title: t.title, reward: t.reward })),
+    };
     if (db === "ok") {
       const { rows } = await query(
         `SELECT hotel, claim_mode, count(*)::int AS prizes,
