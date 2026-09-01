@@ -255,19 +255,25 @@ router.post("/spin", liffAuth, async (req, res) => {
 
   const { draw, prize, balance, isCoinPrize } = outcome;
 
-  // 推播在 transaction 之外 —— LINE 掛掉不該讓客人的獎消失。
-  // 失敗原因留在 draws.push_error，後台可查、可補發。
+  // 推播刻意放在 transaction 之外 —— LINE 掛掉不該讓客人已經抽中的獎消失。
+  //
+  // 但也刻意【等它回來】才回應：轉盤動畫要跑 5.4 秒，LINE push 通常 <500ms，
+  // 客人不會感覺到延遲，我們卻能誠實告訴他券到底有沒有送出去。
+  // （非同步 fire-and-forget 的話，推播失敗時畫面仍會寫「已發送至你的 LINE」，
+  //   客人翻遍聊天室找不到券，只會變成客訴。）
+  let pushed = false;
   if (!isCoinPrize && draw.claim_token) {
-    pushRewardCoupon(HOTEL, req.lineUserId, {
+    const r = await pushRewardCoupon(HOTEL, req.lineUserId, {
       ...draw,
       tier_label: TIER_LABEL[tier],
       spend_threshold: prize.spend_threshold,
       expiry_note: prize.expiry_note,
-    })
-      .then((r) =>
-        query("UPDATE draws SET pushed = $2, push_error = $3 WHERE id = $1",
-          [draw.id, r.ok, r.ok ? null : r.reason]))
-      .catch((e) => console.error("[spin] push 記錄失敗:", e));
+    });
+    pushed = r.ok;
+    if (!r.ok) console.error(`[spin] push 失敗 draw=${draw.id}:`, r.reason);
+    await query("UPDATE draws SET pushed = $2, push_error = $3 WHERE id = $1",
+      [draw.id, r.ok, r.ok ? null : r.reason])
+      .catch((e) => console.error("[spin] push 結果寫入失敗:", e));
   }
 
   res.json({
@@ -279,6 +285,7 @@ router.post("/spin", liffAuth, async (req, res) => {
     code: draw.code,
     coin: prize.coin_reward,
     balance,
+    pushed,
     terms: prize.terms,
     spendThreshold: prize.spend_threshold,
     expiryNote: prize.expiry_note,

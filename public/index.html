@@ -1169,14 +1169,21 @@ function showWin(r){
   wt.style.setProperty('--tag-bg', (TIER_METAL[r.tier]||{}).tag || 'var(--gold)');   // 徽章底＝該等級金屬色
   // 實體獎不在這裡給連結 —— 券已經推到客人的 LINE 聊天室，且那個連結單次有效。
   // 在畫面上再放一次可領取的連結 = 客人可以無限領（POSTMORTEM Bug #9）。
-  $('#modal .code').innerHTML = coin
-    ? `獎勵已直接存入你的錢包<b>＋${coin} 枚洲遊幣</b>`
-    : `優惠券已發送至你的 LINE 聊天室<b>${r.code||''}</b>`
+  const detail = (r.expiryNote ? `<br/>兌換期限：${r.expiryNote}` : '')
+               + (r.spendThreshold ? `<br/>使用門檻：${r.spendThreshold}` : '');
+  if(coin){
+    $('#modal .code').innerHTML = `獎勵已直接存入你的錢包<b>＋${coin} 枚洲遊幣</b>`;
+  }else if(r.pushed){
+    $('#modal .code').innerHTML = `優惠券已發送至你的 LINE 聊天室<b>${r.code||''}</b>`
       + `<span style="display:block;margin-top:8px;font-size:12px;color:#686869">`
-      + `請至 LINE 對話視窗點「領取我的獎品」完成領取`
-      + (r.expiryNote ? `<br/>兌換期限：${r.expiryNote}` : '')
-      + (r.spendThreshold ? `<br/>使用門檻：${r.spendThreshold}` : '')
-      + `</span>`;
+      + `請至 LINE 對話視窗點「領取我的獎品」完成領取${detail}</span>`;
+  }else{
+    // 推播失敗（客人封鎖了官方帳號、LINE 暫時異常…）。獎還是他的 —— 給兌換碼走櫃檯，
+    // 不要騙他「已發送」讓他翻遍聊天室找不到。後台可用 /api/admin/draws/:id/repush 補送。
+    $('#modal .code').innerHTML = `兌換碼（請至櫃檯出示）<b>${r.code||''}</b>`
+      + `<span style="display:block;margin-top:8px;font-size:12px;color:#B14A4A">`
+      + `優惠券暫時無法發送到你的 LINE，請截圖此兌換碼並洽現場服務人員${detail}</span>`;
+  }
   const wn=$('#win-notice'); if(wn){ wn.open=false; wn.hidden=!!coin; }   // 洲遊幣獎勵無實體領獎，隱藏領獎須知
   openModal($('#modal'));
 }
