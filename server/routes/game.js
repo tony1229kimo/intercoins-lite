@@ -242,10 +242,14 @@ router.post("/spin", liffAuth, async (req, res) => {
           FOR UPDATE`,
         [tier],
       );
-      if (!pool.length) throw Object.assign(new Error("tier_unavailable"), { status: 409 });
+      // 該等級的獎全部發完 → 不是錯誤，是「銘謝惠顧」（Tony 2026-09-01）。
+      // 刻意【不扣幣】：獎都沒了還收客人的洲遊幣，客訴與法遵風險都不划算。
+      // 要改成扣幣的話，把下面的 EMPTY_TIER_COST 改成 cost 即可。
+      const EMPTY_TIER_COST = 0;
+      if (!pool.length) return { soldOut: true, cost: EMPTY_TIER_COST, balance: player.balance };
 
       const prize = weightedPick(pool);
-      if (!prize) throw Object.assign(new Error("tier_unavailable"), { status: 409 });
+      if (!prize) return { soldOut: true, cost: EMPTY_TIER_COST, balance: player.balance };
 
       const upd = await client.query(
         `UPDATE prizes SET issued = issued + 1, updated_at = now()
@@ -282,6 +286,22 @@ router.post("/spin", liffAuth, async (req, res) => {
     if (err.status) return res.status(err.status).json({ error: err.message });
     console.error("[spin]", err);
     return res.status(500).json({ error: "internal_error" });
+  }
+
+  // 該等級已全數發完 → 回「銘謝惠顧」，前端照樣轉一圈再開獎，不當成錯誤。
+  if (outcome.soldOut) {
+    return res.json({
+      ok: true,
+      soldOut: true,
+      prizeId: null,
+      prize: "銘謝惠顧",
+      tier,
+      tierLabel: TIER_LABEL[tier],
+      code: null,
+      coin: 0,
+      balance: outcome.balance,
+      costCharged: outcome.cost,
+    });
   }
 
   const { draw, prize, balance, isCoinPrize, isContact } = outcome;
