@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 
 import { ensureSchema, hasDb, query } from "./db.js";
 import { seedPrizes } from "./prizes.js";
+import { verifyPushToken } from "./lib/line.js";
 import gameRoutes from "./routes/game.js";
 import claimRoutes from "./routes/claim.js";
 import adminRoutes from "./routes/admin.js";
@@ -26,7 +27,8 @@ app.use(express.json({ limit: "64kb" }));
 
 // ── 健康檢查 ───────────────────────────────────────────────────
 // ⚠️ *_configured: true 只代表環境變數非空，不代表 key 有效（踩雷 T09）。
-app.get("/api/health", async (_req, res) => {
+//    要真的驗證請加 ?deep=1 —— 會實際打 LINE 與 DB 確認，並回報獎項庫存概況。
+app.get("/api/health", async (req, res) => {
   let db = "not_configured";
   if (hasDb) {
     try {
@@ -36,10 +38,10 @@ app.get("/api/health", async (_req, res) => {
       db = `error: ${err.message}`;
     }
   }
-  res.json({
+
+  const out = {
     ok: db === "ok" || !hasDb,
     service: "intercoins-lite",
-    hotel: "KH",
     db,
     liff_id_configured: Boolean(process.env.LIFF_ID),
     line_channel_id_configured: Boolean(process.env.LINE_CHANNEL_ID),
@@ -47,7 +49,30 @@ app.get("/api/health", async (_req, res) => {
     admin_token_configured: Boolean(process.env.ADMIN_TOKEN),
     public_base_url: process.env.PUBLIC_BASE_URL || null,
     time: new Date().toISOString(),
-  });
+  };
+
+  if (req.query.deep) {
+    // 真的打 LINE 問這把 token 有沒有效、對應到哪個官方帳號。
+    out.line_push_token_verified = await verifyPushToken("KH");
+    if (db === "ok") {
+      const { rows } = await query(
+        `SELECT hotel, claim_mode, count(*)::int AS prizes,
+                sum(quota)::int AS quota, sum(issued)::int AS issued
+           FROM prizes WHERE active AND visible
+          GROUP BY hotel, claim_mode ORDER BY hotel`,
+      );
+      out.prize_pool = rows;
+      const { rows: [t] } = await query(
+        `SELECT count(*)::int AS players,
+                (SELECT count(*)::int FROM draws) AS draws,
+                (SELECT count(*)::int FROM prize_contacts) AS contacts_filled
+           FROM players`,
+      );
+      out.usage = t;
+    }
+  }
+
+  res.json(out);
 });
 
 /**

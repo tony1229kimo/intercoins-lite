@@ -14,6 +14,40 @@ function tokenFor(hotel) {
 }
 
 /**
+ * 驗證 Messaging API token 是不是【真的有效】。
+ *
+ * 踩雷 T09：`*_configured: true` 只代表環境變數非空，貼錯、貼到過期的、
+ * 貼到別的 channel 的，看起來都一樣是 true。這支真的打一次 LINE 才知道。
+ *
+ * GET /v2/bot/info 不需要任何參數，回傳這把 token 對應的官方帳號基本資料 ——
+ * 拿來當「這把鑰匙能不能開這道門」的檢查最乾淨。
+ */
+export async function verifyPushToken(hotel) {
+  const token = tokenFor(hotel);
+  if (!token) return { ok: false, reason: "token 未設定" };
+  try {
+    const resp = await fetch("https://api.line.me/v2/bot/info", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (resp.status === 401) return { ok: false, reason: "token 無效或已過期（401）" };
+    if (!resp.ok) {
+      const body = await resp.text().catch(() => "");
+      return { ok: false, reason: `HTTP ${resp.status} ${body.slice(0, 160)}` };
+    }
+    const info = await resp.json();
+    // 只回官方帳號的公開識別資訊，不回 token 本身。
+    return {
+      ok: true,
+      basicId: info.basicId,          // 例 @xxx
+      displayName: info.displayName,  // 例 高雄洲際酒店
+      chatMode: info.chatMode,
+    };
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
  * 加好友檢查。
  * GET /v2/bot/profile/:userId —— 200 = 已加好友、404 = 未加好友。
  * 這是唯一不用額外授權就能問「這個人是不是我的好友」的方法。
