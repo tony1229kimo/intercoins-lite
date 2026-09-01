@@ -197,10 +197,16 @@ router.get("/winners.csv", async (req, res) => {
 });
 
 /** 臺北待聯繫名單 —— 中了臺北的獎、已留聯絡資訊、還沒處理的。給臺北洲際的人用。 */
+/**
+ * 待聯繫名單 —— claim_mode='contact' 的中獎紀錄。
+ * ⚠️ 不是只有臺北：高雄的兩項住宿大獎（kh-5-1 / kh-5-2）也走這裡，
+ *    所以一定要回傳 hotel，後台才分得出該由哪一館聯繫。
+ */
 router.get("/contacts", async (req, res) => {
   await logAccess(req.adminUser, "contacts", req).catch(() => {});
   const { rows } = await query(
     `SELECT d.id AS draw_id, d.created_at, d.prize_name, d.code, d.tier,
+            pz.hotel,
             c.name, c.phone, c.email, c.contact_window, c.created_at AS filled_at
        FROM draws d
        JOIN prizes pz ON pz.id = d.prize_id

@@ -1,8 +1,10 @@
 /**
- * 員工手冊 → PPTX（兩份）
+ * 管理手冊 → PPTX（機密版）
  *
- *   洲遊幣Lite_員工手冊_一般版.pptx      可發全體同事
  *   洲遊幣Lite_員工手冊_管理版_機密.pptx  限授權人員
+ *
+ * ⚠️ 一般版（雙語、可發全體同事）由 build-staff-guide-bilingual.cjs 產出。
+ *    buildGeneral() 保留但不再輸出檔案，以免兩份一般版並存發錯。
  *
  * 內容與 docs/員工手冊_一般版.md、docs/員工手冊_管理版（機密）.md 同步。
  * 管理版每一頁都有紅色「機密」標記，避免兩份混在一起拿錯。
@@ -283,10 +285,42 @@ function buildAdmin() {
       [{ text: "後台", options: { bold: true } }, { text: "https://intercoins.ictaiwan.net/admin", options: { bold: true } }],
       ["資料存放", "Zeabur（台北機房）Postgres —— 中獎紀錄、聯絡資訊、洲遊幣帳本"],
       ["LINE 官方帳號", "高雄洲際（@519pzkds）—— 加好友檢查與發券都走這個帳號"],
-      ["臺北洲際", "是另一個 LINE 官方帳號，我們沒有推播權限 → 臺北的獎才需要專人聯繫"],
-    ], { y: 1.5, colW: [1.9, 7.0], rowH: 0.44 });
-    callout(s, { x: 0.55, y: 4.2, w: 8.9, h: 0.72, tone: "info", icon: "🔧",
-      text: "臺北細則定案 + 拿到臺北 OA token 後，把該獎項的 claim_mode 改成 coupon 就自動改走發券流程，程式不用改。" });
+      ["臺北洲際", "是另一個 LINE 官方帳號，我們沒有推播權限"],
+    ], { y: 1.5, colW: [1.9, 7.0], rowH: 0.42 });
+    s.addText("領獎方式是【逐一獎項】設定，不是依館別", { x: 0.55, y: 3.4, w: 8.9, h: 0.3, fontFace: FONT, fontSize: 13, bold: true, color: INK });
+    table(s, [
+      [th("claim_mode"), th("行為"), th("適用")],
+      ["coupon", "Omnichat 券推到客人 LINE，連結單次有效", "高雄的 9 個獎項"],
+      [{ text: "contact", options: { bold: true } }, "不發券，跳表單收聯絡資訊，由該館專人聯繫",
+       { text: "臺北全部 6 個 ＋ 高雄的 2 項住宿大獎", options: { bold: true } }],
+    ], { y: 3.74, colW: [1.5, 4.2, 3.2], rowH: 0.36, fontSize: 10.5 });
+    callout(s, { x: 0.55, y: 4.66, w: 8.9, h: 0.55, tone: "info", icon: "🔧",
+      text: "設定在 scripts/import-prizes.py 的 CONTACT_PRIZES。要改回發券把該 id 拿掉重跑匯入即可，程式不用改。" });
+  }
+
+  // 哪些獎項走 contact
+  {
+    const s = slide("一之二、哪些獎項不發券、要專人聯繫",
+      "判斷的關鍵是【這個獎項的 claim_mode】，不是看哪一家飯店。");
+    s.addShape(pptx.ShapeType.roundRect, { x: 0.55, y: 1.5, w: 4.28, h: 2.5, rectRadius: 0.08, fill: { color: TPE_BG }, line: { color: TPE_FG, width: 1 } });
+    s.addText("🔵 臺北洲際 —— 全部 6 項", { x: 0.8, y: 1.66, w: 3.8, h: 0.35, fontFace: FONT, fontSize: 15, bold: true, color: TPE_FG });
+    s.addText([
+      { text: "原因：兌換細則尚未定案\n", options: { bold: true } },
+      { text: "（Excel 細則欄全寫「待酒店開幕後公告」）\n\n", options: {} },
+      { text: "加上臺北是另一個 OA，我們沒有它的推播權限，技術上也發不出券。", options: {} },
+    ], { x: 0.8, y: 2.06, w: 3.8, h: 1.8, fontFace: FONT, fontSize: 11.5, color: INK, lineSpacing: 18 });
+
+    s.addShape(pptx.ShapeType.roundRect, { x: 5.17, y: 1.5, w: 4.28, h: 2.5, rectRadius: 0.08, fill: { color: KH_BG }, line: { color: KH_FG, width: 1 } });
+    s.addText("🟡 高雄洲際 —— 只有這 2 項", { x: 5.42, y: 1.66, w: 3.8, h: 0.35, fontFace: FONT, fontSize: 15, bold: true, color: KH_FG });
+    s.addText([
+      { text: "kh-5-1 港灣海景開放式套房\n", options: { bold: true } },
+      { text: "kh-5-2 豪華經典房\n", options: { bold: true } },
+      { text: "（皆為住宿一晚・含雙人早餐）\n\n", options: {} },
+      { text: "原因：要安排入住日期與房型，不是拿張券到櫃檯就能換。", options: {} },
+    ], { x: 5.42, y: 2.06, w: 3.8, h: 1.8, fontFace: FONT, fontSize: 11.5, color: INK, lineSpacing: 17 });
+
+    callout(s, { x: 0.55, y: 4.2, w: 8.9, h: 0.72, tone: "ok", icon: "✅",
+      text: "高雄的其他 9 個獎項一律照常發 Omnichat 券。表單會依獎品所屬飯店顯示對應的標誌與名稱。" });
   }
 
   // 後台操作
@@ -294,13 +328,13 @@ function buildAdmin() {
     const s = slide("二、後台操作", "個人帳號登入，不是共用密碼。每次調閱名單都會留稽核紀錄。");
     table(s, [
       [th("分頁"), th("用途")],
-      ["臺北待聯繫", "臺北的人照這份聯繫。篩「只看未填」的那些不用人工催 —— 客人下次開遊戲系統會自動再問"],
+      ["待聯繫名單", "有「由誰聯繫」欄可依館別篩，各館認領自己的。篩「只看未填」的不用人工催 —— 客人下次開遊戲會自動再問"],
       ["中獎名單", "兩館共用一份，可依館別／類型篩。最實用是「實體獎・尚未領取」＝待辦清單。可下載 CSV"],
       ["獎項與庫存", "每個獎的實際機率、名額、已發出、剩餘"],
     ], { y: 1.5, colW: [1.9, 7.0], rowH: 0.62 });
     s.addText("上方六個數字只有兩個會變紅 —— 紅了就是有待辦：", { x: 0.55, y: 3.55, w: 8.9, h: 0.3, fontFace: FONT, fontSize: 12.5, bold: true, color: INK });
     callout(s, { x: 0.55, y: 3.9, w: 4.28, h: 0.85, tone: "bad", icon: "📞",
-      text: "臺北待聯繫\n中了臺北獎但還沒留聯絡資訊" });
+      text: "待聯繫\n中了 contact 類獎項但還沒留資料" });
     callout(s, { x: 5.17, y: 3.9, w: 4.28, h: 0.85, tone: "bad", icon: "📨",
       text: "推播失敗\n券沒送進客人 LINE → 要補送" });
   }
@@ -397,7 +431,7 @@ function buildAdmin() {
       [th("狀況"), th("處理")],
       ["客人沒收到券", "中獎名單搜姓名／兌換碼 → 「推播失敗」→ 補送；「券未領取」→ 請他在 LINE 對話往上找"],
       ["客人說券已使用但堅稱沒領", "查 claim_used_at 時間。為防無限領取，每張券只能領一次"],
-      ["臺北中獎者遲遲沒填聯絡資訊", "不用人工催，系統會在他下次開遊戲時自動再問"],
+      ["中獎者遲遲沒填聯絡資訊", "不用人工催，系統會在他下次開遊戲時自動再問"],
       ["某等級獎品發完", "客人會抽到銘謝惠顧且不扣幣。要繼續發獎需增加名額"],
       ["懷疑異常大量中獎", "查同一 LINE UserId 的中獎筆數。洲遊幣每人上限 8 枚，正常不會異常"],
       ["系統整體異常", "打 /api/health?deep=1 看 db 與 LINE token 是否有效"],
@@ -410,8 +444,9 @@ function buildAdmin() {
     s.addText([
       { text: "☐  用手機在 LINE 內完整玩一輪\n", options: {} },
       { text: "☐  抽到高雄的獎 → LINE 收到券 → 點領取 → 再點第二次要顯示「已使用過」\n", options: {} },
-      { text: "☐  抽到臺北的獎 → 看不到領取連結、只跳聯絡表單 → 後台「臺北待聯繫」查得到\n", options: {} },
-      { text: "☐  刻意跳過臺北表單 → 關掉重開遊戲 → 應該要再問一次\n", options: {} },
+      { text: "☐  抽到臺北的獎 → 看不到領取連結、只跳聯絡表單 → 後台「待聯繫名單」查得到\n", options: {} },
+      { text: "☐  抽到高雄的住宿大獎 → 同樣只跳表單，且表單顯示高雄洲際的標誌與名稱\n", options: { bold: true } },
+      { text: "☐  刻意跳過表單 → 關掉重開遊戲 → 應該要再問一次，且飯店名稱正確\n", options: {} },
       { text: "☐  確認六個社群連結都連到正確的官方帳號\n", options: {} },
       { text: "☐  行銷確認獎池容量要不要調整（第四節）\n", options: { bold: true, color: BAD } },
       { text: "☐  兩館櫃檯與客服都收到《員工手冊_一般版》\n", options: {} },
@@ -424,8 +459,8 @@ function buildAdmin() {
 
 // ─── 產生 ───────────────────────────────────────────────────────
 (async () => {
+  // 一般版已改由 build-staff-guide-bilingual.cjs 產出（雙語版），這裡只留管理版。
   const jobs = [
-    [buildGeneral(), "洲遊幣Lite_員工手冊_一般版.pptx"],
     [buildAdmin(), "洲遊幣Lite_員工手冊_管理版_機密.pptx"],
   ];
   for (const [{ pptx, pages }, name] of jobs) {

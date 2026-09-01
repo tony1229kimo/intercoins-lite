@@ -127,7 +127,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     ["1", "活動概要", "About the Campaign"],
     ["2", "客人怎麼參加", "How Guests Join"],
     ["3", "客人怎麼玩", "How the Game Works"],
-    ["4", "⭐ 兩館的獎，領法不一樣", "Two Hotels, Two Redemption Flows"],
+    ["4", "⭐ 兩種領獎方式", "Two Ways Prizes Are Claimed"],
     ["5", "櫃檯核銷步驟", "Counter Redemption Procedure"],
     ["6", "常見問題與標準回答", "FAQ & Suggested Replies"],
     ["7", "不可以對客人說的事", "What Not to Disclose"],
@@ -141,7 +141,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     s.addText(en, { x: x + 0.42, y: y + 0.29, w: 3.7, h: 0.26, fontFace: FONT, fontSize: 9.5, color: GREY });
   });
   callout(s, { x: 0.55, y: 4.75, w: 8.9, h: 0.55, tone: "info", icon: "📖",
-    zh: "第 4 章是本次最容易搞錯的部分，請務必看完。",
+    zh: "第 4 章是本次最容易搞錯的部分（領獎方式看獎品、不看飯店），請務必看完。",
     en: "Section 4 is the most commonly misunderstood part — please read it carefully." });
 }
 
@@ -240,71 +240,80 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// 6 · ⭐ 兩館領獎方式（核心）
+// 6 · ⭐ 兩種領獎方式（核心）
 // ══════════════════════════════════════════════════════════════
 {
-  const s = slide("四、⭐ 兩館的獎，領法不一樣", "Two Hotels, Two Redemption Flows　—　最重要的一頁 / The most important page");
+  const s = slide("四、⭐ 兩種領獎方式", "Two Ways Prizes Are Claimed　—　最重要的一頁 / The most important page");
+  s.addText(bi("看【客人手上有沒有優惠券】，不是看哪一家飯店。",
+    "What matters is whether the guest has a coupon — not which hotel the prize is from.",
+    { zhSize: 12.5, bold: true, color: GOLD }),
+    { x: 0.7, y: 1.28, w: 8.6, h: 0.5, fontFace: FONT, lineSpacing: 17 });
 
-  // 高雄
-  s.addShape(p.ShapeType.roundRect, { x: 0.55, y: 1.35, w: 4.3, h: 2.9, rectRadius: 0.1, fill: { color: KH_BG }, line: { color: KH_LINE, width: 1.25 } });
-  s.addText([{ text: "🟡  高雄洲際酒店的獎\n", options: { fontSize: 15, bold: true, color: KH_FG } },
-             { text: "InterContinental Kaohsiung Prizes", options: { fontSize: 9.5, color: KH_FG } }],
-    { x: 0.78, y: 1.5, w: 3.9, h: 0.5, fontFace: FONT, lineSpacing: 15 });
+  s.addShape(p.ShapeType.roundRect, { x: 0.55, y: 1.85, w: 4.3, h: 2.5, rectRadius: 0.1, fill: { color: KH_BG }, line: { color: KH_LINE, width: 1.25 } });
+  s.addText([{ text: "📩  有優惠券（多數獎項）\n", options: { fontSize: 14, bold: true, color: KH_FG } },
+             { text: "Coupon Issued — most prizes", options: { fontSize: 9, color: KH_FG } }],
+    { x: 0.78, y: 1.98, w: 3.9, h: 0.48, fontFace: FONT, lineSpacing: 14 });
   s.addText([
-    { text: "優惠券自動發送到客人的 LINE 聊天室\n", options: { fontSize: 11.5, bold: true, color: INK } },
-    { text: "A coupon is delivered to the guest's LINE chat automatically.\n\n", options: { fontSize: 9, color: KH_FG } },
-    { text: "▸ 客人自行在 LINE 中點選領取\n", options: { fontSize: 10.5, color: INK } },
-    { text: "   The guest claims it themselves in LINE\n", options: { fontSize: 8.5, color: KH_FG } },
-    { text: "▸ 每張券只能領取一次\n", options: { fontSize: 10.5, color: INK } },
-    { text: "   Each coupon can only be claimed once\n", options: { fontSize: 8.5, color: KH_FG } },
-    { text: "▸ 到店出示兌換碼，櫃檯核銷\n", options: { fontSize: 10.5, color: INK } },
-    { text: "   Present the code at the counter", options: { fontSize: 8.5, color: KH_FG } },
-  ], { x: 0.78, y: 2.08, w: 3.9, h: 2.05, fontFace: FONT, lineSpacing: 13 });
+    { text: "券在中獎當下自動進客人的 LINE\n", options: { fontSize: 11, bold: true, color: INK } },
+    { text: "Delivered to their LINE chat automatically\n\n", options: { fontSize: 8.5, color: KH_FG } },
+    { text: "▸ 客人自行點選領取（限一次）\n", options: { fontSize: 10.5, color: INK } },
+    { text: "   Claimed by the guest, once only\n", options: { fontSize: 8, color: KH_FG } },
+    { text: "▸ 到店出示兌換碼 → 櫃檯核銷\n", options: { fontSize: 10.5, color: INK } },
+    { text: "   Present the code → redeem at counter", options: { fontSize: 8, color: KH_FG } },
+  ], { x: 0.78, y: 2.5, w: 3.9, h: 1.75, fontFace: FONT, lineSpacing: 13 });
 
-  // 臺北
-  s.addShape(p.ShapeType.roundRect, { x: 5.15, y: 1.35, w: 4.3, h: 2.9, rectRadius: 0.1, fill: { color: TPE_BG }, line: { color: TPE_LINE, width: 1.25 } });
-  s.addText([{ text: "🔵  臺北洲際酒店的獎\n", options: { fontSize: 15, bold: true, color: TPE_FG } },
-             { text: "InterContinental Taipei Prizes", options: { fontSize: 9.5, color: TPE_FG } }],
-    { x: 5.38, y: 1.5, w: 3.9, h: 0.5, fontFace: FONT, lineSpacing: 15 });
+  s.addShape(p.ShapeType.roundRect, { x: 5.15, y: 1.85, w: 4.3, h: 2.5, rectRadius: 0.1, fill: { color: TPE_BG }, line: { color: TPE_LINE, width: 1.25 } });
+  s.addText([{ text: "📞  沒有券・專人聯繫\n", options: { fontSize: 14, bold: true, color: TPE_FG } },
+             { text: "No Coupon — direct follow-up", options: { fontSize: 9, color: TPE_FG } }],
+    { x: 5.38, y: 1.98, w: 3.9, h: 0.48, fontFace: FONT, lineSpacing: 14 });
   s.addText([
-    { text: "不會發送優惠券，改由專人聯繫\n", options: { fontSize: 11.5, bold: true, color: INK } },
-    { text: "No coupon is issued; a colleague follows up directly.\n\n", options: { fontSize: 9, color: TPE_FG } },
+    { text: "臺北全部獎項 ＋ 高雄的兩項住宿大獎\n", options: { fontSize: 11, bold: true, color: INK } },
+    { text: "All Taipei prizes + two Kaohsiung room prizes\n\n", options: { fontSize: 8.5, color: TPE_FG } },
     { text: "▸ 畫面請客人留姓名／手機／Email\n", options: { fontSize: 10.5, color: INK } },
-    { text: "   Guest submits name, mobile and email\n", options: { fontSize: 8.5, color: TPE_FG } },
-    { text: "▸ 臺北洲際同仁主動聯繫安排\n", options: { fontSize: 10.5, color: INK } },
-    { text: "   The Taipei team contacts them directly\n", options: { fontSize: 8.5, color: TPE_FG } },
-    { text: "▸ 客人手上沒有券，這是正常的\n", options: { fontSize: 10.5, color: INK } },
-    { text: "   Having no coupon is expected", options: { fontSize: 8.5, color: TPE_FG } },
-  ], { x: 5.38, y: 2.08, w: 3.9, h: 2.05, fontFace: FONT, lineSpacing: 13 });
+    { text: "   Guest submits their contact details\n", options: { fontSize: 8, color: TPE_FG } },
+    { text: "▸ 該館同仁主動聯繫安排\n", options: { fontSize: 10.5, color: INK } },
+    { text: "   That hotel's team contacts them directly", options: { fontSize: 8, color: TPE_FG } },
+  ], { x: 5.38, y: 2.5, w: 3.9, h: 1.75, fontFace: FONT, lineSpacing: 13 });
 
-  callout(s, { x: 0.55, y: 4.42, w: 8.9, h: 0.72, tone: "bad", icon: "🚫",
-    zh: "臺北洲際的兌換碼，高雄櫃檯無法核銷。獎品名稱前方會標示「臺北洲際酒店」。",
-    en: "Taipei redemption codes cannot be processed at Kaohsiung counters. Prize names are prefixed with the hotel name." });
+  callout(s, { x: 0.55, y: 4.5, w: 8.9, h: 0.62, tone: "bad", icon: "🚫",
+    zh: "客人只有兌換碼、LINE 裡沒有優惠券 → 是專人聯繫的獎項，請勿核銷。",
+    en: "If the guest has only a code and no coupon in LINE, it is a follow-up prize — do not redeem." });
 }
 
 // ══════════════════════════════════════════════════════════════
-// 7 · 為什麼這樣設計
+// 7 · 哪些獎要專人聯繫
 // ══════════════════════════════════════════════════════════════
 {
-  const s = slide("四之二、為什麼這樣設計", "Why the Flows Differ");
-  s.addText(bi(
-    "因為臺北洲際酒店的兌換細則尚未公布，無法在客人中獎當下告知確切的兌換方式。",
-    "InterContinental Taipei's redemption terms have not yet been finalised, so exact redemption details cannot be given at the moment of winning.",
-    { zhSize: 13 }),
-    { x: 0.7, y: 1.4, w: 8.6, h: 0.8, fontFace: FONT, lineSpacing: 19 });
+  const s = slide("四之二、哪些獎項要專人聯繫", "Which Prizes Require Follow-Up");
 
-  s.addShape(p.ShapeType.roundRect, { x: 0.55, y: 2.3, w: 8.9, h: 1.55, rectRadius: 0.08, fill: { color: OK_BG }, line: { color: OK, width: 1 } });
-  s.addText([
-    { text: "✅  這樣的安排可以清楚區分兩館的中獎者\n", options: { fontSize: 13, bold: true, color: OK } },
-    { text: "      This cleanly separates winners from the two properties\n\n", options: { fontSize: 9.5, color: OK } },
-    { text: "      高雄的中獎者 → 走「券核銷」流程　　臺北的中獎者 → 走「名單聯繫」流程\n", options: { fontSize: 11.5, color: INK } },
-    { text: "      Kaohsiung winners go through counter redemption; Taipei winners through direct follow-up.\n", options: { fontSize: 9, color: OK } },
-    { text: "      兩邊不會混淆，也不會發生客人拿臺北的獎到高雄櫃檯、現場卻無從處理的情況。", options: { fontSize: 10.5, color: INK } },
-  ], { x: 0.75, y: 2.44, w: 8.5, h: 1.3, fontFace: FONT, lineSpacing: 14 });
+  s.addShape(p.ShapeType.roundRect, { x: 0.55, y: 1.3, w: 4.3, h: 1.5, rectRadius: 0.08, fill: { color: TPE_BG }, line: { color: TPE_LINE, width: 1 } });
+  s.addText([{ text: "🔵  臺北洲際酒店\n", options: { fontSize: 13, bold: true, color: TPE_FG } },
+             { text: "InterContinental Taipei\n\n", options: { fontSize: 8.5, color: TPE_FG } },
+             { text: "全部獎項\n", options: { fontSize: 12, bold: true, color: INK } },
+             { text: "All prizes — redemption terms not yet finalised", options: { fontSize: 8.5, color: TPE_FG } }],
+    { x: 0.78, y: 1.44, w: 3.9, h: 1.25, fontFace: FONT, lineSpacing: 14 });
 
-  callout(s, { x: 0.55, y: 4.05, w: 8.9, h: 0.95, tone: "warn", icon: "ℹ️",
-    zh: "客人若反映「抽到臺北的獎卻沒收到券」，這是正常的，並非系統異常，可安心向客人說明。",
-    en: "If a guest says they won a Taipei prize but received no coupon, this is expected behaviour — not a system error. You can reassure them with confidence." });
+  s.addShape(p.ShapeType.roundRect, { x: 5.15, y: 1.3, w: 4.3, h: 1.5, rectRadius: 0.08, fill: { color: KH_BG }, line: { color: KH_LINE, width: 1 } });
+  s.addText([{ text: "🟡  高雄洲際酒店\n", options: { fontSize: 13, bold: true, color: KH_FG } },
+             { text: "InterContinental Kaohsiung\n\n", options: { fontSize: 8.5, color: KH_FG } },
+             { text: "只有這兩項住宿大獎\n", options: { fontSize: 12, bold: true, color: INK } },
+             { text: "Only these two room prizes — the rest issue coupons", options: { fontSize: 8.5, color: KH_FG } }],
+    { x: 5.38, y: 1.44, w: 3.9, h: 1.25, fontFace: FONT, lineSpacing: 14 });
+
+  [["港灣海景開放式套房 住宿一晚（含雙人早餐）", "Harbour View Studio Suite — one night with breakfast for two"],
+   ["豪華經典房 住宿一晚（含雙人早餐）", "Deluxe Classic Room — one night with breakfast for two"]]
+    .forEach(([zh, en], i) => {
+    const y = 2.95 + i * 0.72;
+    s.addShape(p.ShapeType.roundRect, { x: 0.55, y, w: 8.9, h: 0.62, rectRadius: 0.05, fill: { color: SOFT }, line: { color: KH_LINE, width: 0.75 } });
+    s.addText("🏨", { x: 0.75, y: y + 0.06, w: 0.4, h: 0.5, fontFace: FONT, fontSize: 13, valign: "middle" });
+    s.addText([{ text: "高雄洲際酒店 " + zh + "\n", options: { fontSize: 11.5, bold: true, color: INK } },
+               { text: en, options: { fontSize: 8.5, color: GREY } }],
+      { x: 1.2, y: y + 0.05, w: 8.05, h: 0.52, fontFace: FONT, lineSpacing: 13 });
+  });
+
+  callout(s, { x: 0.55, y: 4.45, w: 8.9, h: 0.72, tone: "info", icon: "🛏",
+    zh: "住宿券要安排入住日期與房型，不是拿張券到櫃檯就能換，所以由飯店的人主動聯繫。",
+    en: "Room stays require arranging dates and room types, so the hotel contacts the guest directly." });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -314,8 +323,8 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
   const s = slide("五、櫃檯核銷步驟（高雄）", "Counter Redemption Procedure (Kaohsiung)");
   step(s, { y: 1.4, num: 1, zh: "請客人出示 LINE 中的優惠券畫面與兌換碼",
     en: "Ask the guest to show the coupon in LINE, along with the redemption code" });
-  step(s, { y: 2.05, num: 2, zh: "確認獎品名稱是「高雄洲際酒店 ○○○」",
-    en: "Confirm the prize is prefixed with InterContinental Kaohsiung" });
+  step(s, { y: 2.05, num: 2, zh: "沒有優惠券、只有兌換碼 → 是專人聯繫的獎項，不核銷",
+    en: "A code with no coupon means it is a follow-up prize — do not redeem" });
   step(s, { y: 2.7, num: 3, zh: "依券面規則辦理（部分獎品有消費門檻或指定地點／時段）",
     en: "Follow the terms shown on the coupon — some prizes have a minimum spend, venue or time window" });
   step(s, { y: 3.35, num: 4, zh: "核銷後交付獎品",
@@ -325,8 +334,8 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     zh: "無法確認時，不要自行判斷。",
     en: "If anything is unclear, do not decide on your own — contact your supervisor to check the record." });
   callout(s, { x: 5.15, y: 4.1, w: 4.3, h: 0.95, tone: "bad", icon: "🚫",
-    zh: "獎品名稱是「臺北洲際酒店」→ 不核銷。",
-    en: "If the prize is a Taipei one, do not redeem. Tell the guest a colleague will contact them." });
+    zh: "臺北的獎、或高雄的住宿大獎 → 一律不核銷。",
+    en: "Taipei prizes and Kaohsiung room stays are never redeemed at the counter." });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -343,9 +352,9 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     azh: "每張券只能領取一次。如果您確定沒有領過，我幫您回報查詢。",
     aen: "Each coupon can only be claimed once. If you're sure you haven't claimed it, I'll report it for verification." });
   qa(s, { y: 3.90, h: 1.18,
-    zh: "我抽到臺北洲際的獎，怎麼都沒有券？", en: "I won a Taipei prize but there's no coupon.",
-    azh: "臺北洲際的獎項由臺北的同仁直接與您聯繫安排，所以不會發送優惠券。只要您已留下聯絡資料，我們會盡快與您聯繫。",
-    aen: "Taipei prizes are arranged directly by our Taipei colleagues, so no coupon is issued. We'll be in touch shortly." });
+    zh: "我中獎了，怎麼都沒有券？", en: "I won a prize, but there's no coupon.",
+    azh: "部分獎項（臺北的全部獎項，以及高雄的兩項住宿大獎）由飯店同仁直接與您聯繫安排，所以不會發送優惠券。只要您已留下聯絡資料，我們會盡快與您聯繫。",
+    aen: "Some prizes — all Taipei prizes and two Kaohsiung room stays — are arranged directly by our colleagues, so no coupon is issued. We'll be in touch shortly." });
 }
 {
   const s = slide("六、常見問題與標準回答（2/3）", "FAQ & Suggested Replies (2 of 3)");
@@ -436,8 +445,8 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
   s.addShape(p.ShapeType.rect, { x: 0.6, y: 1.06, w: 0.5, h: 0.04, fill: { color: GOLD_LT } });
 
   const cards = [
-    ["🟡", "高雄的獎", "Kaohsiung", "券自動進客人 LINE\n出示兌換碼 → 櫃檯核銷", "Coupon in LINE → redeem at counter", KH_BG, KH_FG],
-    ["🔵", "臺北的獎", "Taipei", "不發券，臺北同仁主動聯繫\n客人沒有券是正常的", "No coupon — Taipei team follows up", TPE_BG, TPE_FG],
+    ["📩", "有優惠券", "Coupon Issued", "券自動進客人 LINE\n出示兌換碼 → 櫃檯核銷", "Coupon in LINE → redeem at counter", KH_BG, KH_FG],
+    ["📞", "沒有券", "Follow-Up", "臺北全部＋高雄兩項住宿大獎\n該館同仁主動聯繫，不核銷", "Taipei + 2 KH room prizes — never redeem", TPE_BG, TPE_FG],
     ["🚫", "絕不能說", "Never Disclose", "中獎機率 · 剩餘數量\n其他客人的資料", "Odds · stock · other guests' data", BAD_BG, BAD],
     ["🙋", "不確定就轉單", "When Unsure", "不要自行承諾兌換方式或日期\n一切以活動頁公告為準", "Escalate — never promise terms", OK_BG, OK],
   ];

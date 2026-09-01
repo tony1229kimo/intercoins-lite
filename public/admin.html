@@ -105,7 +105,7 @@ tr:last-child td{border-bottom:none}
   <div class="cards" id="stats"></div>
 
   <nav role="tablist">
-    <button role="tab" data-tab="contacts" aria-selected="true">臺北待聯繫</button>
+    <button role="tab" data-tab="contacts" aria-selected="true">待聯繫名單</button>
     <button role="tab" data-tab="winners">中獎名單</button>
     <button role="tab" data-tab="prizes">獎項與庫存</button>
   </nav>
@@ -184,7 +184,7 @@ function renderStats(){
     ['抽獎次數', spins],
     ['已發出洲遊幣', s.coinsIssued],
     ['未使用洲遊幣', s.coinsOutstanding],
-    ['臺北待聯繫', c.pending, c.pending > 0],
+    ['待聯繫', c.pending, c.pending > 0],
     ['推播失敗', s.push.failed, s.push.failed > 0],
   ].map(([k, v, warn]) =>
     `<div class="stat${warn ? ' warn' : ''}"><div class="k">${k}</div><div class="v">${v ?? 0}</div></div>`
@@ -206,28 +206,32 @@ function render(){
   else renderPrizes();
 }
 
-/* ── 臺北待聯繫 ── */
+/* ── 待聯繫名單（臺北全部 ＋ 高雄兩項住宿大獎） ── */
 function renderContacts(){
   const rows = CACHE.contacts.winners || [];
   $('#pane').innerHTML = `
     <div class="toolbar">
       <input id="q" placeholder="搜尋姓名 / 手機 / Email / 獎品 / 兌換碼" />
+      <select id="h"><option value="">兩館全部</option><option value="TPE">只看臺北洲際</option><option value="KH">只看高雄洲際</option></select>
       <select id="f"><option value="">全部</option><option value="pending">只看未填聯絡資訊</option><option value="filled">只看已填</option></select>
       <button id="csv">下載中獎名單 CSV</button>
       <span class="count" id="cnt"></span>
     </div>
     <div class="tablewrap"><table>
-      <thead><tr><th>中獎時間</th><th>等級</th><th>獎品</th><th>兌換碼</th>
+      <thead><tr><th>中獎時間</th><th>由誰聯繫</th><th>等級</th><th>獎品</th><th>兌換碼</th>
         <th>姓名</th><th>手機</th><th>Email</th><th>方便時段</th><th>狀態</th></tr></thead>
       <tbody id="tb"></tbody>
     </table></div>
-    <div class="hint">臺北洲際的獎項不發 Omnichat 券，改由專人聯繫。<b>「未填」代表中獎者關掉表單還沒補</b> ——
-      他下次進遊戲時系統會自動再問一次，不需要人工催。</div>`;
+    <div class="hint"><b>「由誰聯繫」＝獎品所屬飯店</b>，請各館認領自己的那幾筆。
+      這份名單含<b>臺北洲際的全部獎項</b>，以及<b>高雄洲際的兩項住宿大獎</b>（港灣海景開放式套房、豪華經典房）——
+      這些獎項不發 Omnichat 券，改由專人聯繫。<br>
+      <b>「未填」代表中獎者關掉表單還沒補</b> —— 他下次進遊戲時系統會自動再問一次，不需要人工催。</div>`;
 
   const draw = () => {
     const q = $('#q').value.trim().toLowerCase();
-    const f = $('#f').value;
+    const f = $('#f').value, h = $('#h').value;
     const list = rows.filter(r => {
+      if(h && r.hotel !== h) return false;
       if(f === 'pending' && r.name) return false;
       if(f === 'filled' && !r.name) return false;
       if(!q) return true;
@@ -236,6 +240,7 @@ function renderContacts(){
     $('#cnt').textContent = list.length + ' / ' + rows.length + ' 筆';
     $('#tb').innerHTML = list.length ? list.map(r => `<tr>
       <td class="mono">${fmt(r.created_at)}</td>
+      <td><span class="pill ${r.hotel === 'KH' ? 'kh' : 'tpe'}">${r.hotel === 'KH' ? '高雄' : '臺北'}</span></td>
       <td>${esc(r.label)}</td>
       <td>${esc(r.prize_name)}</td>
       <td class="mono">${esc(r.code)}</td>
@@ -244,10 +249,11 @@ function renderContacts(){
       <td class="mono">${esc(r.email)}</td>
       <td>${esc(r.contact_window)}</td>
       <td>${r.name ? '<span class="pill ok">已填</span>' : '<span class="pill no">未填</span>'}</td>
-    </tr>`).join('') : '<tr><td colspan="9"><div class="empty">目前沒有符合條件的資料</div></td></tr>';
+    </tr>`).join('') : '<tr><td colspan="10"><div class="empty">目前沒有符合條件的資料</div></td></tr>';
   };
   $('#q').addEventListener('input', draw);
   $('#f').addEventListener('change', draw);
+  $('#h').addEventListener('change', draw);
   $('#csv').addEventListener('click', downloadCsv);
   draw();
 }
