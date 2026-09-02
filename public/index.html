@@ -1395,7 +1395,9 @@ function showWin(r){
     openContactForm(PENDING_CONTACTS[0]);
     return;
   }
-  setModalBtn('收下獎品');
+  // 洲遊幣獎沒有東西要去 LINE 領（直接入帳），其餘實體獎一律把客人送回 OA 拿券。
+  if(coin) setModalBtn('收下獎品');
+  else     setModalBtn('前往 LINE 領取獎品', 'oa');
   $('#win-lbl').textContent='恭喜中獎';
   $('#win-prize').textContent=r.prize;
   const wt=$('#win-tier'); wt.textContent=r.tierLabel||TIER_RN[r.tier];
@@ -1422,8 +1424,28 @@ function showWin(r){
 }
 function openModal(m){ m.classList.add('show');
   const c=m.querySelector('.card'); if(c){ c.tabIndex=-1; c.focus({preventScroll:true}); } }
-function setModalBtn(label){ const b=$('#modal-ok'); if(b) b.textContent=label; }
-function closeModal(){ $('#modal').classList.remove('show'); }
+/**
+ * 導回高雄洲際酒店的 LINE 官方帳號（Tony 2026-09-02）。
+ *
+ * 中獎的券就發在那個聊天室裡，所以抽完就把客人送過去，不要讓他卡在彈窗。
+ * 用 CFG.addFriendUrl（lin.ee 短網址）—— LINE 內外都能正確開啟 OA，
+ * 比 liff.closeWindow() 可靠：從 QR 掃進來的話 closeWindow 不一定回得到聊天室。
+ */
+function goToOA(){
+  const url = (CFG && CFG.addFriendUrl) || 'https://lin.ee/uKzkNI9';
+  try{ location.href = url; }catch(e){ window.open(url, '_blank'); }
+}
+
+// 關掉彈窗後要不要導去 OA。null = 不導（銘謝惠顧、已達上限這種沒東西可領的情況）。
+let MODAL_EXIT = null;
+function setModalBtn(label, exit){
+  const b=$('#modal-ok'); if(b) b.textContent=label;
+  MODAL_EXIT = exit || null;
+}
+function closeModal(){
+  $('#modal').classList.remove('show');
+  if(MODAL_EXIT === 'oa'){ MODAL_EXIT = null; goToOA(); }
+}
 $('#modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') $$('.modal.show').forEach(m=>m.classList.remove('show')); });
 
@@ -1620,7 +1642,11 @@ $('#ct-submit').addEventListener('click',()=>{
       contactDrawId=null;
       const bz=(HOTEL_BRAND[sentHotel]||HOTEL_BRAND.TPE).zh;
       showReward(`已收到你的聯絡資訊<b>${bz}將盡快與你聯繫</b>`);
-      if(PENDING_CONTACTS.length) setTimeout(promptPendingContact, 2800);   // 還有其他筆就接著問
+      if(PENDING_CONTACTS.length){
+        setTimeout(promptPendingContact, 2800);   // 還有其他筆就接著問，先別把人導走
+      }else{
+        setTimeout(goToOA, 2800);                 // 都填完了 → 回 OA（等訊息看完再導）
+      }
     })
     .catch(e=>{ toast('送出失敗，請再試一次'); console.error('[contact]', e); })
     .finally(()=>{ btn.disabled=false; btn.textContent=label; });   // 一定要解鎖，別讓按鈕卡死
