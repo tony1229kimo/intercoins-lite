@@ -17,6 +17,29 @@ const liffAuth = requireLiffAuth();
 // 所以臺北的獎不推券、改收聯絡資訊（prizes.claim_mode = 'contact'）。
 const OA_HOTEL = "KH";
 
+/**
+ * 每個 LINE 帳號最多能中幾件【實體獎】（洲遊幣不算）。0 = 不限。
+ *
+ * 為什麼要有這個上限（Tony 2026-09-02）：
+ *   轉盤是全獎盤，而「洲遊幣 +N」是全額退幣 ⇒ 客人手上的每一枚幣最後都會變成實體獎。
+ *   每人 8 枚幣 = 每人可以抱走約 8 件實體獎，132 份實體獎只夠約 31 人，
+ *   等於 4 個人就能把三等獎清空。印在月餅盒上的 QR 每一盒都是同一個網址、
+ *   帶不了任何識別碼，所以「一盒只能掃一次」做不到 —— 改用這個上限止血。
+ *
+ * 上限 2 → 獎池可服務人數從約 31 人拉到約 66 人。
+ * 要調整改 Zeabur 環境變數 MAX_PHYSICAL_WINS，記得按「儲存並重新部署」。
+ */
+const MAX_PHYSICAL_WINS = Number.parseInt(process.env.MAX_PHYSICAL_WINS ?? "2", 10) || 0;
+
+/** 這個人已經中了幾件實體獎（coin_reward = 0 的抽獎紀錄；含待聯繫類）。 */
+async function countPhysicalWins(client, userId) {
+  const { rows: [r] } = await client.query(
+    "SELECT COUNT(*)::int AS n FROM draws WHERE line_user_id = $1 AND coin_reward = 0",
+    [userId],
+  );
+  return r.n;
+}
+
 /** 首次進來自動建檔；每次都更新 LINE 顯示名稱/頭像。 */
 async function upsertPlayer(req) {
   const { rows } = await query(
@@ -64,7 +87,8 @@ router.get("/me/friendship", liffAuth, async (req, res) => {
 router.get("/state", liffAuth, async (req, res) => {
   const player = await upsertPlayer(req);
 
-  const [{ rows: claimed }, { rows: prizes }, { rows: won }, { rows: pending }, { rows: profile }] =
+  const [{ rows: claimed }, { rows: prizes }, { rows: won }, { rows: pending }, { rows: profile },
+         { rows: physical }] =
     await Promise.all([
       query("SELECT task_id FROM task_claims WHERE line_user_id = $1", [req.lineUserId]),
       query(
@@ -91,6 +115,11 @@ router.get("/state", liffAuth, async (req, res) => {
       ),
       query(
         "SELECT name, phone, email FROM player_profiles WHERE line_user_id = $1",
+        [req.lineUserId],
+      ),
+      // 已中的實體獎件數 —— 前端要用來在達上限時就先擋住按鈕，不要讓客人白轉一圈。
+      query(
+        "SELECT COUNT(*)::int AS n FROM draws WHERE line_user_id = $1 AND coin_reward = 0",
         [req.lineUserId],
       ),
     ]);
@@ -139,6 +168,9 @@ router.get("/state", liffAuth, async (req, res) => {
     })),
     // 已填過個人資料就幫客人帶入，不用重打一次。
     contactPrefill: profile[0] ?? null,
+    // 每人實體獎上限。前端據此在達標時停用抽獎鈕（伺服器端 /spin 另有一道硬擋）。
+    physicalWins: physical[0].n,
+    maxPhysicalWins: MAX_PHYSICAL_WINS,
   });
 });
 
@@ -236,6 +268,16 @@ router.post("/spin", liffAuth, async (req, res) => {
       if (!player) throw Object.assign(new Error("no_player"), { status: 404 });
       if (player.balance < cost) throw Object.assign(new Error("insufficient_coins"), { status: 400 });
 
+      // 每人實體獎上限。刻意放在 players 那道 FOR UPDATE 之後 ——
+      // 同一個人連點兩次會被鎖序列化，不會兩發同時穿過上限。
+      // 一樣【不扣幣】：都不給抽了還收客人的幣，客訴與法遵風險都不划算。
+      if (MAX_PHYSICAL_WINS > 0) {
+        const wins = await countPhysicalWins(client, req.lineUserId);
+        if (wins >= MAX_PHYSICAL_WINS) {
+          return { capReached: true, cost: 0, balance: player.balance, wins };
+        }
+      }
+
       const { rows: pool } = await client.query(
         `SELECT * FROM prizes
           WHERE tier = $1 AND active AND visible
@@ -290,6 +332,20 @@ router.post("/spin", liffAuth, async (req, res) => {
     return res.status(500).json({ error: "internal_error" });
   }
 
+  // 已達每人實體獎上限 → 不轉盤、不扣幣，直接告訴客人。
+  if (outcome.capReached) {
+    return res.json({
+      ok: true,
+      capReached: true,
+      wins: outcome.wins,
+      maxPhysicalWins: MAX_PHYSICAL_WINS,
+      tier,
+      tierLabel: TIER_LABEL[tier],
+      balance: outcome.balance,
+      costCharged: 0,
+    });
+  }
+
   // 該等級已全數發完 → 回「銘謝惠顧」，前端照樣轉一圈再開獎，不當成錯誤。
   if (outcome.soldOut) {
     return res.json({
@@ -328,12 +384,14 @@ router.post("/spin", liffAuth, async (req, res) => {
       [draw.id, r.ok, r.ok ? null : r.reason])
       .catch((e) => console.error("[spin] push 結果寫入失敗:", e));
   } else if (isContact) {
-    // 臺北的獎：推一則提醒，避免客人關掉彈窗後就忘了要留聯絡資訊。
-    // 走的還是高雄的 OA（客人是從那裡進來的），內容只說明後續由臺北洲際聯繫。
+    // contact 類的獎：推一則提醒，避免客人關掉彈窗後就忘了要留聯絡資訊。
+    // 走的還是高雄的 OA（客人是從那裡進來的），但內文要講對是哪一館提供的獎，
+    // 所以一定要帶 prizeHotel —— 漏傳的話訊息會退回「本酒店」這種沒頭沒尾的講法。
     const r = await pushContactReminder(OA_HOTEL, req.lineUserId, {
       prizeName: draw.prize_name,
       code: draw.code,
       tierLabel: TIER_LABEL[tier],
+      prizeHotel: prize.hotel,
     });
     pushed = r.ok;
     if (!r.ok) console.warn(`[spin] 聯絡提醒推播失敗 draw=${draw.id}:`, r.reason);

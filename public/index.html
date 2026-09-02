@@ -438,6 +438,8 @@ img.li-av{background:none}
 .win-notice .wn-body p{font-size:var(--t-cap);color:var(--muted);line-height:var(--lh-body);margin:6px 0}
 .win-notice .wn-draft{color:var(--muted);opacity:.75;font-style:italic;margin-top:10px}
 .card .code b{display:block;font-size:var(--t-lead);color:var(--ink);letter-spacing:.15em;margin-top:3px;font-weight:var(--w-label)}
+/* 行內強調。.code b 是「大字重點值」（會 display:block 跳行），敘述句裡不能用它。 */
+.card .code .em{font-weight:700;color:var(--ink)}
 /* 滿版金色主鈕：只套在明確標記 .btn-fill 的按鈕上（不再貪婪套用到 .card 內所有 button，
    避免逼出一堆高特異性覆蓋——特異性戰爭的根源） */
 .card button.btn-fill{margin-top:var(--s5);width:100%;font-family:var(--serif);font-weight:var(--w-label);font-size:var(--t-action);color:#fff;
@@ -622,7 +624,7 @@ img.li-av{background:none}
           <p class="wn-draft">【AI 草稿】需主管／公關／法務／財務審核後始可對外發布</p>
         </div>
       </details>
-      <button class="btn-fill" onclick="closeModal()">收下獎品</button>
+      <button id="modal-ok" class="btn-fill" onclick="closeModal()">收下獎品</button>
     </div>
   </div>
 
@@ -795,7 +797,7 @@ const PROD=true;
    localStorage 只留 pending（跳去社群後等回來驗證的暫時旗標），不再存餘額 ——
    前端存餘額就等於讓客人自己改幣數。 */
 const LS='intercoins_pending_v1';
-let S = {balance:0, done:{}, won:[], pending:{}};
+let S = {balance:0, done:{}, won:[], pending:{}, physicalWins:0, maxPhysicalWins:0};
 try{ S.pending = JSON.parse(localStorage.getItem(LS) || '{}') || {}; }catch(e){ S.pending={}; }
 function save(){ try{ localStorage.setItem(LS, JSON.stringify(S.pending)); }catch(e){} }
 
@@ -839,6 +841,10 @@ function applyState(st){
   if(st.user) setIdentity(st.user.displayName, st.user.pictureUrl);
   CONTACT_PREFILL = st.contactPrefill || CONTACT_PREFILL;
   PENDING_CONTACTS = st.pendingContacts || [];
+  // 每人實體獎上限（洲遊幣不算）。伺服器端 /spin 另有一道硬擋，這裡只是先在畫面上擋住，
+  // 免得客人白轉一圈才被告知不能中獎。
+  S.physicalWins    = st.physicalWins ?? S.physicalWins ?? 0;
+  S.maxPhysicalWins = st.maxPhysicalWins ?? S.maxPhysicalWins ?? 0;
   buildRing(selTier);
   renderBalance(); renderStack(); renderTasks(); renderProfileCard();
 }
@@ -878,6 +884,10 @@ function promptPendingContact(){
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 function renderBalance(){ const b=$('#bal-wheel'); if(b) b.textContent=S.balance; }
+/** 這個人是否已達實體獎上限。maxPhysicalWins = 0 代表不限。 */
+function atWinCap(){
+  return (S.maxPhysicalWins|0) > 0 && (S.physicalWins|0) >= (S.maxPhysicalWins|0);
+}
 let toastT;
 function toast(msg){ $('#toast-msg').textContent=msg; $('#toast').classList.add('show');
   clearTimeout(toastT); toastT=setTimeout(()=>$('#toast').classList.remove('show'),2200); }
@@ -1141,16 +1151,27 @@ function refreshDraw(){
   const coins=COST[selTier];                       // 目前等級所需枚數＝投入枚數
   $$('.tier-card').forEach(c=>c.setAttribute('aria-checked', +c.dataset.coins===coins ? 'true':'false'));
   const afford=S.balance>=coins;
+  const capped=atWinCap();
   const cta=$('#spin-btn');
   if(cta && !spinning){
     const main=cta.querySelector('.cta-main'), sub=cta.querySelector('.cta-sub');
-    if(afford){ cta.dataset.mode='spin'; if(main) main.textContent='開始抽獎'; if(sub) sub.textContent=`投入 ${coins} 枚 · 抽${TIER_RN[selTier]}`; }
+    // 達上限 → 停用按鈕。refreshDraw 是按鈕狀態的唯一真相來源，
+    // unlockSpin() 會先 disabled=false 再呼叫這裡，所以這裡一定要把它設回去。
+    cta.disabled = capped;
+    if(capped){
+      cta.dataset.mode='capped';
+      if(main) main.textContent='已達中獎上限';
+      if(sub)  sub.textContent=`每人最多中 ${S.maxPhysicalWins} 項獎品`;
+    }
+    else if(afford){ cta.dataset.mode='spin'; if(main) main.textContent='開始抽獎'; if(sub) sub.textContent=`投入 ${coins} 枚 · 抽${TIER_RN[selTier]}`; }
     else { cta.dataset.mode='earn'; if(main) main.textContent='去賺洲遊幣'; if(sub) sub.textContent=`還差 ${coins-S.balance} 枚可抽${TIER_RN[selTier]}`; }
   }
   const need=$('#dp-need');
-  if(need) need.textContent = afford
-    ? `目前有 ${S.balance} 枚洲遊幣，抽完剩 ${S.balance-coins} 枚`
-    : `洲遊幣不足 · 完成任務可賺更多洲遊幣`;
+  if(need) need.textContent = capped
+    ? `你已中得 ${S.physicalWins} 項獎品，達本活動每人上限`
+    : afford
+      ? `目前有 ${S.balance} 枚洲遊幣，抽完剩 ${S.balance-coins} 枚`
+      : `洲遊幣不足 · 完成任務可賺更多洲遊幣`;
 }
 // 餘額/畫面刷新（多處沿用：抽獎後、任務、個資送出、init）
 function renderStack(){ renderBalance(); refreshDraw(); }
@@ -1266,6 +1287,8 @@ async function spin(){
   if(spinning) return;                            // 連點保護（第一道）
   const tier=selTier, cost=COST[tier];            // 抽獎等級＝等級卡選定（selTier 由 pickCoins 設定）
   if(S.balance < cost){ toast('洲遊幣不足'); return; }
+  // 已達每人實體獎上限 → 不轉盤（轉了也只能給銘謝惠顧，看起來像壞掉）。
+  if(atWinCap()){ showWin({capReached:true, wins:S.physicalWins, maxPhysicalWins:S.maxPhysicalWins}); return; }
   spinning=true;
   const cta=$('#spin-btn'); cta.disabled=true; cta.innerHTML='<span class="cta-main">抽獎中…</span>';
   $$('.tier-card').forEach(c=>c.disabled=true);    // 抽獎中鎖定等級卡
@@ -1287,6 +1310,18 @@ async function spin(){
     return;
   }
 
+  // 伺服器端硬擋回來（例如客人開了兩個分頁，另一邊先把額度用掉了）。
+  // 這時盤面還沒開始轉，直接解鎖 + 說明，不要硬轉一圈。
+  if(result.capReached){
+    clearTimeout(watchdog);
+    S.physicalWins = result.wins ?? S.physicalWins;
+    S.maxPhysicalWins = result.maxPhysicalWins ?? S.maxPhysicalWins;
+    S.balance = result.balance ?? S.balance;
+    unlockSpin(); renderBalance();
+    showWin(result);
+    return;
+  }
+
   // 停在後端指定的獎項：用 prize id 找出它在盤面上的索引，收在頂端（最終角 ≡ -idx*step）。
   // ⚠️ 不能用 slot —— 兩館的 slot 會撞號（kh-1-1 和 tpe-1-1 都是「第 1 格」）。
   const items=PRIZES[tier]||[], n=items.length||1, step=360/n;
@@ -1305,6 +1340,8 @@ async function spin(){
   spinState={ base, delta: turns*360 + align, start: performance.now(), dur };
 
   S.balance=result.balance;
+  // 實體獎才計入上限（洲遊幣不算）。就地累加，按鈕才會在動畫結束時立刻反映。
+  if(!result.soldOut && !result.coin) S.physicalWins = (S.physicalWins|0) + 1;
   S.won.unshift({prize:result.prize, tier, code:result.code, coin:result.coin});
 
   setTimeout(()=>{
@@ -1316,17 +1353,38 @@ async function spin(){
 }
 function showWin(r){
   const coin=r.coin||0;
+  // 已達每人實體獎上限 —— 不是中獎也不是錯誤，要講清楚為什麼不能再抽，
+  // 以及手上剩下的洲遊幣沒有被扣。
+  if(r.capReached){
+    $('#win-lbl').textContent='本次結果';
+    $('#win-prize').textContent='已達中獎上限';
+    const wt=$('#win-tier'); wt.textContent='每人上限';
+    wt.style.setProperty('--tag-bg','#8C8578');
+    // ⚠️ .code b 是 display:block 的「大字重點值」樣式（兌換碼就是用它）。
+    //    行內強調要用 <span class="em">，不然字會自己跳一行、標點被拆到下一行。
+    $('#modal .code').innerHTML='本活動每人最多中得'
+      + `<b>${r.maxPhysicalWins||S.maxPhysicalWins} 項獎品</b>`
+      + `<span style="display:block;margin-top:8px;font-size:12px;color:#686869;letter-spacing:0">`
+      + `你已中得 ${r.wins ?? S.physicalWins} 項。為了讓更多人有機會中獎，就不再重複中獎囉。`
+      + `<br>你的洲遊幣<span class="em">沒有被扣除</span>。</span>`;
+    const wn=$('#win-notice'); if(wn) wn.hidden=true;
+    setModalBtn('知道了');
+    openModal($('#modal'));
+    return;
+  }
   // 該等級的獎已全數發完 → 銘謝惠顧。洲遊幣沒有被扣，明講讓客人安心。
   if(r.soldOut){
     $('#win-lbl').textContent='本次結果';        // 銘謝惠顧配「恭喜中獎」很怪
     $('#win-prize').textContent='銘謝惠顧';
     const wt=$('#win-tier'); wt.textContent=r.tierLabel||TIER_RN[r.tier];
     wt.style.setProperty('--tag-bg','#8C8578');
-    $('#modal .code').innerHTML='本等級獎項已全數送出'
-      + `<span style="display:block;margin-top:8px;font-size:12px;color:#686869">`
-      + (r.costCharged ? '' : '你的洲遊幣<b style="font-size:inherit">沒有被扣除</b>，')
+    $('#modal .code').innerHTML='本次沒有中獎'
+      + `<span style="display:block;margin-top:8px;font-size:12px;color:#686869;letter-spacing:0">`
+      + '本等級獎項已全數送出。'
+      + (r.costCharged ? '' : '你的洲遊幣<span class="em">沒有被扣除</span>，')
       + '歡迎改抽其他等級。</span>';
     const wn=$('#win-notice'); if(wn) wn.hidden=true;
+    setModalBtn('知道了');
     openModal($('#modal'));
     return;
   }
@@ -1337,6 +1395,7 @@ function showWin(r){
     openContactForm(PENDING_CONTACTS[0]);
     return;
   }
+  setModalBtn('收下獎品');
   $('#win-lbl').textContent='恭喜中獎';
   $('#win-prize').textContent=r.prize;
   const wt=$('#win-tier'); wt.textContent=r.tierLabel||TIER_RN[r.tier];
@@ -1363,6 +1422,7 @@ function showWin(r){
 }
 function openModal(m){ m.classList.add('show');
   const c=m.querySelector('.card'); if(c){ c.tabIndex=-1; c.focus({preventScroll:true}); } }
+function setModalBtn(label){ const b=$('#modal-ok'); if(b) b.textContent=label; }
 function closeModal(){ $('#modal').classList.remove('show'); }
 $('#modal').addEventListener('click',e=>{ if(e.target.id==='modal') closeModal(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') $$('.modal.show').forEach(m=>m.classList.remove('show')); });
