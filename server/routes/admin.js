@@ -51,15 +51,19 @@ router.get("/prizes", async (_req, res) => {
   const summary = Object.entries(byTier).map(([tier, list]) => {
     const live = list.filter((p) => p.active && p.visible && Number(p.weight) > 0
       && (p.quota === 0 || p.issued < p.quota));
+    // 抽獎是對 100 抽的，所以 weight 本身就是真實機率，不要再正規化。
+    // 總和不足 100 的缺口 = 銘謝惠顧的機率。
     const total = live.reduce((s, p) => s + Number(p.weight), 0);
     return {
       tier: Number(tier),
       label: TIER_LABEL[tier],
       open: live.length > 0,
+      totalPct: +total.toFixed(2),
+      missPct: +Math.max(0, 100 - total).toFixed(2),   // 銘謝惠顧機率
       prizes: list.map((p) => ({
         ...p,
         weight: Number(p.weight),
-        pct: total > 0 && live.includes(p) ? +(Number(p.weight) / total * 100).toFixed(2) : 0,
+        pct: live.includes(p) ? +Number(p.weight).toFixed(2) : 0,
         remaining: p.quota === 0 ? null : p.quota - p.issued,
       })),
     };

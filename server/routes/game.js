@@ -292,8 +292,15 @@ router.post("/spin", liffAuth, async (req, res) => {
       const EMPTY_TIER_COST = 0;
       if (!pool.length) return { soldOut: true, cost: EMPTY_TIER_COST, balance: player.balance };
 
-      const prize = weightedPick(pool);
-      if (!prize) return { soldOut: true, cost: EMPTY_TIER_COST, balance: player.balance };
+      // 對 100 抽：權重總和不足 100 的缺口就是「這次沒中獎」（Tony 2026-09-02）。
+      // 這是行銷控制發獎速度的手段，所以【要扣幣】——
+      // 不扣的話客人可以一直重抽直到中獎，等於完全沒有控制到。
+      // 與上面「獎發完了」的 soldOut 是兩回事，那個不扣幣。
+      const prize = weightedPick(pool, { outOf: 100 });
+      if (!prize) {
+        await addCoins(client, req.lineUserId, -cost, "spin_miss", `tier${tier}`);
+        return { missed: true, cost, balance: player.balance - cost };
+      }
 
       const upd = await client.query(
         `UPDATE prizes SET issued = issued + 1, updated_at = now()
@@ -343,6 +350,23 @@ router.post("/spin", liffAuth, async (req, res) => {
       tierLabel: TIER_LABEL[tier],
       balance: outcome.balance,
       costCharged: 0,
+    });
+  }
+
+  // 機率性未中獎（權重缺口）→ 銘謝惠顧，而且【有扣幣】。
+  if (outcome.missed) {
+    return res.json({
+      ok: true,
+      soldOut: true,          // 前端沿用同一套「銘謝惠顧」畫面
+      missed: true,           // 但文案要講「已扣除 N 枚」
+      prizeId: null,
+      prize: "銘謝惠顧",
+      tier,
+      tierLabel: TIER_LABEL[tier],
+      code: null,
+      coin: 0,
+      balance: outcome.balance,
+      costCharged: outcome.cost,
     });
   }
 
