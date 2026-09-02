@@ -1,10 +1,17 @@
 /**
- * 每人實體獎上限（MAX_PHYSICAL_WINS，預設 2）。
+ * 每人實體獎上限（MAX_PHYSICAL_WINS）—— **開啟時**的行為。
  *
- * 這條規則有兩個都很貴的失敗方向，所以兩邊都要測：
- *   擋太少 → 一個人抱走 8 件實體獎，132 份獎品 4 個人就清空
+ * 2026-09-02 起預設是 0（不限），所以這裡明示設 2 來測。
+ * 功能保留是因為它隨時可能要再開（例如又出現退幣循環或獎品被掃貨）。
+ *
+ * 開啟後有兩個都很貴的失敗方向，兩邊都要測：
+ *   擋太少 → 一個人抱走一堆實體獎
  *   擋太多 → 客人一進來就被鎖住不能玩（比不擋還糟）
  */
+// 上限預設已改為 0（不限），所以這個檔案要【明示開啟】才測得到擋人的行為。
+// env 一定要在 startApp() 之前設好 —— 那個常數是 module load 時讀的。
+process.env.MAX_PHYSICAL_WINS = "2";
+
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { DB, resetDB, startApp } from "./_harness.mjs";

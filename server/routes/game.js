@@ -18,18 +18,21 @@ const liffAuth = requireLiffAuth();
 const OA_HOTEL = "KH";
 
 /**
- * 每個 LINE 帳號最多能中幾件【實體獎】（洲遊幣不算）。0 = 不限。
+ * 每個 LINE 帳號最多能中幾件【實體獎】（洲遊幣不算）。**預設 0 = 不限。**
  *
- * 為什麼要有這個上限（Tony 2026-09-02）：
- *   轉盤是全獎盤，而「洲遊幣 +N」是全額退幣 ⇒ 客人手上的每一枚幣最後都會變成實體獎。
- *   每人 8 枚幣 = 每人可以抱走約 8 件實體獎，132 份實體獎只夠約 31 人，
- *   等於 4 個人就能把三等獎清空。印在月餅盒上的 QR 每一盒都是同一個網址、
- *   帶不了任何識別碼，所以「一盒只能掃一次」做不到 —— 改用這個上限止血。
+ * 這個上限是 2026-09-02 為了止血才加的：當時洲遊幣是全額退幣，
+ * 客人手上的每一枚幣都會循環換成實體獎，4 個人就能把三等獎清空。
  *
- * 上限 2 → 獎池可服務人數從約 31 人拉到約 66 人。
- * 要調整改 Zeabur 環境變數 MAX_PHYSICAL_WINS，記得按「儲存並重新部署」。
+ * 同日稍後把洲遊幣機率設成 0% 之後，退幣循環就沒了 ——
+ * 每抽必扣、每人上限 8 枚幣，消耗量自然封頂，上限失去必要性。
+ * Tony 2026-09-02 決定關掉（三等獎還有 78 個名額）。
+ *
+ * 功能保留：要重新開啟就在 Zeabur 設 MAX_PHYSICAL_WINS=2（或其他數字），
+ * 記得按「儲存並重新部署」—— 容器只在啟動時讀 process.env。
+ * 解析失敗一律 fail-open 當作不限：這個開關壞掉的方向必須是「不擋」，
+ * 不能是「把客人全鎖在門外」。
  */
-const MAX_PHYSICAL_WINS = Number.parseInt(process.env.MAX_PHYSICAL_WINS ?? "2", 10) || 0;
+const MAX_PHYSICAL_WINS = Number.parseInt(process.env.MAX_PHYSICAL_WINS ?? "0", 10) || 0;
 
 /** 這個人已經中了幾件實體獎（coin_reward = 0 的抽獎紀錄；含待聯繫類）。 */
 async function countPhysicalWins(client, userId) {
