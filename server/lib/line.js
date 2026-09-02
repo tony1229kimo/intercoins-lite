@@ -100,7 +100,9 @@ export async function pushContactReminder(hotel, userId, { prizeName, code, tier
     header: {
       type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: BRAND_INK,
       contents: [
-        { type: "text", text: "洲遊幣 · 恭喜中獎", color: "#F4D489", size: "sm", weight: "bold", letterSpacing: "2px" },
+        // ⚠️ 不要加 letterSpacing —— LINE Flex 的 text 沒有這個屬性，整則訊息會被退 400。
+        //    2026-09-02 就是它害 76 筆中獎推播【全部】失敗，客人一張券都沒收到。
+        { type: "text", text: "洲 遊 幣 · 恭 喜 中 獎", color: "#F4D489", size: "sm", weight: "bold" },
         { type: "text", text: tierLabel, color: "#FFFFFF", size: "xxl", weight: "bold", margin: "sm" },
       ],
     },
@@ -170,7 +172,9 @@ export async function pushRewardCoupon(hotel, userId, draw) {
     header: {
       type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: BRAND_INK,
       contents: [
-        { type: "text", text: "洲遊幣 · 恭喜中獎", color: "#F4D489", size: "sm", weight: "bold", letterSpacing: "2px" },
+        // ⚠️ 不要加 letterSpacing —— LINE Flex 的 text 沒有這個屬性，整則訊息會被退 400。
+        //    2026-09-02 就是它害 76 筆中獎推播【全部】失敗，客人一張券都沒收到。
+        { type: "text", text: "洲 遊 幣 · 恭 喜 中 獎", color: "#F4D489", size: "sm", weight: "bold" },
         { type: "text", text: draw.tier_label, color: "#FFFFFF", size: "xxl", weight: "bold", margin: "sm" },
       ],
     },
