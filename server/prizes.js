@@ -29,11 +29,32 @@ export async function loadPrizeSeed() {
   return JSON.parse(raw);
 }
 
+/**
+ * 把 prizes.json 匯入資料庫。**每次容器啟動都會跑**（server/index.js）。
+ *
+ * ⚠️ 2026-09-02 事故：原本 ON CONFLICT 會把 quota 與 weight 一起蓋回 seed 檔的值，
+ *    結果後台改的名額與機率【每次部署都被還原】—— 而且完全沒有任何提示。
+ *    當天把洲遊幣機率調成 0%、補回 44 個名額，20 分鐘後一次部署全部消失。
+ *
+ * 所以現在分成兩類欄位：
+ *   目錄欄位（名稱／連結／等級／領獎方式…）→ 每次都以 prizes.json 為準
+ *   營運欄位（quota / weight / visible / active）→ **只在第一次 INSERT 時設定**，
+ *                                                  之後一律由後台 PATCH 管理
+ *
+ * 真的要用 seed 檔覆蓋營運值時（例如行銷重新給了一版獎項表），
+ * 設環境變數 PRIZES_RESEED_OPS=1 再重新部署，跑完記得拿掉。
+ */
 export async function seedPrizes() {
   const seed = await loadPrizeSeed();
   if (!seed.length) {
     console.warn("[prizes] seed 檔是空的，跳過匯入");
     return 0;
+  }
+
+  // 營運欄位預設【不覆蓋】，避免部署把後台調好的名額與機率洗掉。
+  const RESEED_OPS = process.env.PRIZES_RESEED_OPS === "1";
+  if (RESEED_OPS) {
+    console.warn("[prizes] ⚠️ PRIZES_RESEED_OPS=1 —— 這次會用 seed 檔覆蓋 quota 與 weight");
   }
 
   for (const p of seed) {
@@ -51,11 +72,10 @@ export async function seedPrizes() {
          claim_mode      = EXCLUDED.claim_mode,
          coupon_link     = EXCLUDED.coupon_link,
          coin_reward     = EXCLUDED.coin_reward,
-         quota           = EXCLUDED.quota,
-         weight          = EXCLUDED.weight,
          spend_threshold = EXCLUDED.spend_threshold,
          terms           = EXCLUDED.terms,
          expiry_note     = EXCLUDED.expiry_note,
+         ${RESEED_OPS ? "quota = EXCLUDED.quota, weight = EXCLUDED.weight," : ""}
          updated_at      = now()`,
       [p.id, p.hotel, p.tier, p.slot, p.position ?? 0, p.name, p.claim_mode ?? "coupon",
        p.coupon_link, p.coin_reward, p.quota, p.weight, p.spend_threshold,
@@ -72,6 +92,7 @@ export async function seedPrizes() {
   );
   if (rowCount) console.warn(`[prizes] ${rowCount} 個獎項不在 seed 中，已自動下架`);
 
-  console.log(`[prizes] 匯入 ${seed.length} 個獎項`);
+  console.log(`[prizes] 匯入 ${seed.length} 個獎項`
+    + (RESEED_OPS ? "（含 quota/weight 覆蓋）" : "（quota/weight 維持資料庫現值）"));
   return seed.length;
 }
