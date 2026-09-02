@@ -1099,7 +1099,33 @@ async function initLiff(){
 
    密碼閘只留給「還沒設 LIFF」的內部預覽。正式上線（有 LIFF_ID）時真正的門檻是
    LINE 登入 + 加好友，不該再叫客人輸入密碼。 */
+/* ---------- 測試用：假裝中三等獎 ----------
+   用途：在真實 LINE App 裡驗證「中獎後跳轉回高雄洲際 OA」實際會跳到哪。
+   純前端演示 —— 不呼叫任何 API、不建立中獎紀錄、不扣洲遊幣、不扣獎品庫存。
+   獎品名稱刻意標【測試】，客人萬一誤入也不會以為自己中獎。
+   開啟方式：在 LIFF 網址後面加 ?demo=win */
+function maybeDemoWin(){
+  let on=false;
+  try{ on = /[?&]demo=win(?:&|$)/.test(location.search); }catch(e){ return false; }
+  if(!on) return false;
+  const gate=$('#access-gate'); if(gate) gate.hidden=true;
+  const intro=$('#intro'); if(intro) intro.hidden=true;
+  const app=$('#app'); if(app) app.hidden=false;
+  // ⚠️ 一定要延到整份 script 跑完再叫 showWin。
+  //    boot() 在檔案中段就執行，而 showWin 會用到宣告在後面的 const
+  //    （MODAL_EXIT、TIER_METAL、TIER_RN…）—— 直接叫會踩 TDZ 噴
+  //    「Cannot access 'X' before initialization」，而且錯誤被 async boot 吞掉，
+  //    畫面只是靜靜地不出現彈窗，非常難查。
+  setTimeout(() => showWin({
+    prize:'【測試】高雄洲際酒店 明信片組',
+    tier:1, tierLabel:'三等獎',
+    code:'IC-TEST-0000', coin:0, claimMode:'coupon', pushed:true,
+  }), 0);
+  return true;
+}
+
 (async function boot(){
+  if(maybeDemoWin()) return;      // 測試入口：跳過登入、加好友、開場影片
   if(LIFF_ID){
     // 先把密碼閘藏起來，避免探路期間閃過一格密碼畫面
     const gate=$('#access-gate'); if(gate) gate.hidden=true;
@@ -1440,7 +1466,13 @@ function goToOA(){
 }
 
 // 關掉彈窗後要不要導去 OA。null = 不導（銘謝惠顧、已達上限這種沒東西可領的情況）。
-let MODAL_EXIT = null;
+//
+// ⚠️ 用 var 不是 let —— 這個宣告在檔案後段，但 boot()（含 ?demo=win 測試入口）
+//    在前面就會呼叫 setModalBtn()。用 let 會落在 TDZ 裡噴
+//    「Cannot access 'MODAL_EXIT' before initialization」。
+//    跟上面 REDUCE 那個註解是同一個坑。
+//    （測試入口本身也已改成延後一個 tick 才叫 showWin，這裡的 var 是第二層保險。）
+var MODAL_EXIT = null;
 function setModalBtn(label, exit){
   const b=$('#modal-ok'); if(b) b.textContent=label;
   MODAL_EXIT = exit || null;
