@@ -130,7 +130,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     ["4", "⭐ 兩種領獎方式", "Two Ways Prizes Are Claimed"],
     ["5", "⭐ 只有兌換碼、沒有券", "Code but No Coupon"],
     ["6", "櫃檯核銷步驟", "Counter Redemption Procedure"],
-    ["7", "常見問題與標準回答", "FAQ & Suggested Replies"],
+    ["7", "常見問題與標準回答（含櫃檯）", "FAQ & Suggested Replies"],
     ["8", "不可以對客人說的事 / 何時回報", "What Not to Disclose / When to Escalate"],
   ];
   items.forEach(([num, zh, en], i) => {
@@ -381,7 +381,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
 // 9-11 · 常見問題（拆三頁，避免卡片壓到頁尾）
 // ══════════════════════════════════════════════════════════════
 {
-  const s = slide("七、常見問題與標準回答（1/3）", "FAQ & Suggested Replies (1 of 3)");
+  const s = slide("七、常見問題與標準回答（1/4）", "FAQ & Suggested Replies (1 of 4)");
   qa(s, { y: 1.22, h: 1.36,
     zh: "我沒有收到優惠券？", en: "I didn't receive my coupon.",
     azh: "請打開高雄洲際酒店的 LINE 對話往上找，優惠券是以訊息形式發送的。若真的找不到，我幫您回報，會有同仁協助處理。",
@@ -396,7 +396,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     aen: "Room stays and Taipei prizes are arranged directly by our colleagues, so no coupon is issued. For any other prize, I'll report it and a colleague will assist." });
 }
 {
-  const s = slide("七、常見問題與標準回答（2/3）", "FAQ & Suggested Replies (2 of 3)");
+  const s = slide("七、常見問題與標準回答（2/4）", "FAQ & Suggested Replies (2 of 4)");
   qa(s, { y: 1.22, h: 1.12,
     zh: "我還沒留聯絡資料，要怎麼補？", en: "I haven't submitted my contact details yet.",
     azh: "請再打開一次活動頁面，系統會自動提醒您填寫。",
@@ -412,7 +412,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     aen: "The list shows the prize types in this campaign; some are already fully claimed. The 15% dining discount is the guaranteed baseline and is not listed. The draw result is what counts." });
 }
 {
-  const s = slide("七、常見問題與標準回答（3/3）", "FAQ & Suggested Replies (3 of 3)");
+  const s = slide("七、常見問題與標準回答（3/4）", "FAQ & Suggested Replies (3 of 4)");
   qa(s, { y: 1.3, h: 1.3,
     zh: "可以指定要抽哪個獎嗎？中獎率多少？", en: "Can I choose my prize? What are the odds?",
     azh: "抽獎結果由系統隨機產生，無法指定。詳細規則請參考活動頁面的「活動規則」。",
@@ -424,6 +424,25 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
   callout(s, { x: 0.55, y: 4.35, w: 8.9, h: 0.7, tone: "bad", icon: "🚫",
     zh: "客人追問中獎率時，請勿透露任何數字 —— 一律回「由系統隨機產生」。",
     en: "If pressed on the odds, never share numbers — always answer that results are randomly generated." });
+}
+
+{
+  // 原本獨立的《櫃檯應對指引》併進來的三題（2026-09-04）——
+  // 那份的核心「只有兌換碼怎麼分兩種人」已經是第五章，只差這三個問答。
+  const s = slide("七、常見問題與標準回答（4/4）", "FAQ & Suggested Replies (4 of 4)");
+  qa(s, { y: 1.22, h: 1.24,
+    zh: "為什麼一等獎、二等獎抽到的都是餐飲 85 折？",
+    en: "Why do the First and Second Prize tiers only give the dining discount?",
+    azh: "這兩個等級的獎品已經全部送完，目前抽到的是保底的餐飲 85 折。三等獎還有其他獎品，建議您改抽三等獎。",
+    aen: "All prizes in those two tiers have been claimed, so the guaranteed 15% dining discount is awarded instead. The Third Prize tier still has other prizes available." });
+  qa(s, { y: 2.56, h: 1.16,
+    zh: "為什麼現在抽不到「洲遊幣」了？", en: "Why can't I win InterCoins from the wheel any more?",
+    azh: "洲遊幣目前只能透過完成任務取得，轉盤上不再發放。",
+    aen: "InterCoins are now earned only by completing tasks; they are no longer awarded on the wheel." });
+  qa(s, { y: 3.82, h: 1.28,
+    zh: "我中了住宿獎，什麼時候會有人聯絡我？", en: "I won a room stay — when will someone contact me?",
+    azh: "已收到您的資料，飯店同仁會主動與您聯繫安排。若超過一週仍未接到聯繫，我幫您回報。",
+    aen: "We have your details and a colleague from the hotel will contact you to make arrangements. If you haven't heard from us within a week, I'll report it for you." });
 }
 
 // ══════════════════════════════════════════════════════════════
