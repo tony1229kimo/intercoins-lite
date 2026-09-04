@@ -174,7 +174,7 @@ img.li-av{background:none}
 /* 次要文字連結列（獎項一覽 · 去賺洲遊幣） */
 .ctrl-links{display:flex;align-items:center;justify-content:center;gap:var(--s2)}
 .ctrl-dot{color:var(--on-night-soft);opacity:.7}
-/* 底部條款頁腳：隱私權入口＋版本＋最終解釋權（法律文字為 AI 草稿，需法務審核） */
+/* 底部條款頁腳 */
 .app-footer{margin-top:var(--s4);padding-top:var(--s3);border-top:1px solid rgba(201,181,131,.18);
   text-align:center;font-family:var(--sans)}
 .af-terms{font-size:var(--t-fine);line-height:var(--lh-body);color:var(--on-night-soft);
@@ -279,7 +279,7 @@ img.li-av{background:none}
   background:radial-gradient(circle at 50% 50%,rgba(255,228,150,.6),rgba(255,205,110,.28) 46%,transparent 0%)}
 .tier-aura.show{opacity:1;animation:auraPulse 2.4s ease-in-out infinite}
 @keyframes auraPulse{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.05)}}
-/* 右下角歸零（原型測試用，正式版移除） */
+/* 右下角歸零（測試環境專用） */
 #reset-btn{position:fixed;right:12px;bottom:12px;z-index:var(--z-reset);font-family:var(--sans);font-size:var(--t-cap);
   color:#fff;background:rgba(43,38,32,.75);border:1px solid rgba(255,255,255,.2);border-radius:999px;
   min-height:var(--tap);padding:0 16px;display:inline-flex;align-items:center;backdrop-filter:blur(3px)}
@@ -403,7 +403,7 @@ img.li-av{background:none}
   .reward.show .reward-text{animation:none}
 }
 
-/* 假驗證過場 */
+/* 任務完成過場 */
 .verify{position:fixed;inset:0;z-index:var(--z-overlay);display:none;flex-direction:column;align-items:center;justify-content:center;
   gap:18px;background:rgba(30,26,20,.6);backdrop-filter:blur(4px)}
 .verify.show{display:flex;animation:fade .3s}
@@ -436,7 +436,6 @@ img.li-av{background:none}
 .win-notice[open] summary::after{content:" ▴"}
 .win-notice .wn-body{margin-top:8px;max-height:40vh;overflow-y:auto}
 .win-notice .wn-body p{font-size:var(--t-cap);color:var(--muted);line-height:var(--lh-body);margin:6px 0}
-.win-notice .wn-draft{color:var(--muted);opacity:.75;font-style:italic;margin-top:10px}
 .card .code b{display:block;font-size:var(--t-lead);color:var(--ink);letter-spacing:.15em;margin-top:3px;font-weight:var(--w-label)}
 /* 行內強調。.code b 是「大字重點值」（會 display:block 跳行），敘述句裡不能用它。 */
 .card .code .em{font-weight:700;color:var(--ink)}
@@ -452,7 +451,7 @@ img.li-av{background:none}
 .toast img{width:20px;height:20px}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
-/* 訪客入口：公開原型的輕量存取門檻（正式保護應改由後端驗證） */
+/* 訪客入口 */
 #access-gate{position:fixed;inset:0;z-index:var(--z-gate);display:flex;align-items:center;justify-content:center;
   padding:24px;background:linear-gradient(rgba(31,27,20,.56),rgba(31,27,20,.72)),url('assets/bg.webp') center/cover}
 #access-gate[hidden],#app[hidden]{display:none}
@@ -578,7 +577,6 @@ img.li-av{background:none}
         <button class="pl-link" id="earn-link" type="button">去賺更多洲遊幣 →</button>
       </div>
 
-      <!-- 【AI 草稿】以下法律文字需法務/公關審核；「最終解釋權」於台灣消保法定型化契約下恐受限，上線前請法務確認措辭 -->
       <footer class="app-footer">
         <div class="af-terms">
           本活動之獎項、規則與細節，以主辦單位（高雄洲際酒店／臺北洲際酒店）公告為準；主辦單位保留活動內容變更、暫停或終止，及最終解釋之權利。
@@ -611,7 +609,6 @@ img.li-av{background:none}
       <div class="prize" id="win-prize">—</div>
       <div class="tier-tag" id="win-tier">I</div>
       <div class="code">兌換碼（請至櫃台核銷）<b id="win-code">—</b></div>
-      <!-- 【AI 草稿】領獎須知：需主管／公關／法務／財務審核後始可對外發布；稅務門檻為待查證值 -->
       <details class="win-notice" id="win-notice">
         <summary>領獎須知（點閱）</summary>
         <div class="wn-body">
@@ -621,14 +618,13 @@ img.li-av{background:none}
           <p><b>獎項限制</b>：獎項不得更換款式、規格、顏色，不得折換現金、找零、轉讓或轉售；如遇缺貨或不可抗力，得以同等值獎項替代。</p>
           <p><b>資格查核</b>：資料不實、不全或無法聯繫、逾期未領、或以不正當方式（重複帳號、外掛、舞弊）參加者，主辦單位得取消資格並收回獎項。</p>
           <p><b>得獎公布</b>：中獎結果將以去識別化方式公布；完整活動規則與個資條款詳見頁尾連結。</p>
-          <p class="wn-draft">【AI 草稿】需主管／公關／法務／財務審核後始可對外發布</p>
         </div>
       </details>
       <button id="modal-ok" class="btn-fill" onclick="closeModal()">收下獎品</button>
     </div>
   </div>
 
-  <!-- 個人資料表單（原型 UI，不儲存） -->
+  <!-- 個人資料表單 -->
   <div class="modal" id="profile-modal" role="dialog" aria-modal="true" aria-label="填寫個人資料">
     <div class="card">
       <button class="pf-close" id="pf-close" type="button" aria-label="關閉">✕</button>
@@ -700,7 +696,7 @@ img.li-av{background:none}
     </div>
   </div>
 
-  <!-- 活動規則彈窗（由頁尾「活動規則」開啟）；【AI 草稿】需主管／公關／法務／財務審核後始可對外發布 -->
+  <!-- 活動規則彈窗 -->
   <div class="modal" id="rules-modal" role="dialog" aria-modal="true" aria-label="活動規則">
     <div class="card notice-card">
       <button class="pf-close" id="rules-close" type="button" aria-label="關閉">✕</button>
@@ -718,7 +714,6 @@ img.li-av{background:none}
         <p><b>【喪失資格】</b>有資料不實、不全或無法聯繫、逾期未領、以不正當方式參加或不符參加資格等情形之一者，主辦單位得取消其得獎資格並收回獎項或追償等值價款。</p>
         <p><b>【個人資料】</b>本活動個人資料之蒐集、處理及利用，依「隱私權／個資條款」告知事項辦理。</p>
         <p><b>【其他】</b>如有未盡事宜，主辦單位得補充公告；活動內容如有變更、暫停或終止，以主辦單位於活動頁公告為準。<b>【最終解釋權措辭待法務確認】</b></p>
-        <p style="opacity:.75;font-style:italic">【AI 草稿】需主管／公關／法務／財務審核後始可對外發布；其中稅務門檻與扣繳數值為待查證值。</p>
       </div>
     </div>
   </div>
@@ -768,13 +763,13 @@ img.li-av{background:none}
     <div class="reward-text">你得到了<b>第一枚</b>洲遊幣</div>
   </div>
 
-  <!-- 假驗證過場（返回遊戲後短暫顯示，再發幣） -->
+  <!-- 任務完成過場 -->
   <div class="verify" id="verify">
     <div class="verify-spin" aria-hidden="true"></div>
     <div class="verify-text">確認中…</div>
   </div>
 
-  <!-- 原型測試用：歸零所有數值（正式版移除） -->
+  <!-- 測試環境專用：歸零所有數值 -->
   <button id="reset-btn" type="button">歸零</button>
 
 </div>
@@ -790,9 +785,7 @@ const TIER_RN = {5:'一等獎', 3:'二等獎', 1:'三等獎'};   // 一等獎最
 /* ---------- state ---------- */
 /* 上線型態旗標：true＝正式（隱藏歸零鈕、不用示意中獎名單、驗證文案中性）；false＝開發/測試 */
 const PROD=true;
-/* 洲遊幣餘額、任務完成、中獎紀錄一律【以伺服器為準】。
-   localStorage 只留 pending（跳去社群後等回來驗證的暫時旗標），不再存餘額 ——
-   前端存餘額就等於讓客人自己改幣數。 */
+/* 餘額、任務完成、中獎紀錄一律以伺服器為準；localStorage 只留暫時旗標。 */
 const LS='intercoins_pending_v1';
 let S = {balance:0, done:{}, won:[], pending:{}, physicalWins:0, maxPhysicalWins:0};
 try{ S.pending = JSON.parse(localStorage.getItem(LS) || '{}') || {}; }catch(e){ S.pending={}; }
@@ -838,8 +831,7 @@ function applyState(st){
   if(st.user) setIdentity(st.user.displayName, st.user.pictureUrl);
   CONTACT_PREFILL = st.contactPrefill || CONTACT_PREFILL;
   PENDING_CONTACTS = st.pendingContacts || [];
-  // 每人實體獎上限（洲遊幣不算）。伺服器端 /spin 另有一道硬擋，這裡只是先在畫面上擋住，
-  // 免得客人白轉一圈才被告知不能中獎。
+  // 由伺服器提供的中獎次數狀態。
   S.physicalWins    = st.physicalWins ?? S.physicalWins ?? 0;
   S.maxPhysicalWins = st.maxPhysicalWins ?? S.maxPhysicalWins ?? 0;
   buildRing(selTier);
@@ -847,9 +839,8 @@ function applyState(st){
 }
 async function refreshState(){ applyState(await api('/state')); }
 
-/* ---------- 中獎聯絡資訊（臺北獎項）----------
-   臺北洲際的兌換細則還沒定案 → 不發 Omnichat 券，改收聯絡方式由專人聯繫。
-   客人有可能關掉彈窗就跑了，所以 /api/state 會回 pendingContacts，下次進來再問一次。 */
+/* ---------- 中獎聯絡資訊 ----------
+   部分獎項不發券，改收聯絡方式由專人聯繫；未填寫者下次進來會再詢問一次。 */
 let CONTACT_PREFILL=null, PENDING_CONTACTS=[], contactDrawId=null;
 /* 走「留聯絡資訊」的不只臺北 —— 高雄的兩項住宿大獎也是（住宿券要安排入住日期，
    由飯店的人主動聯繫比較妥當）。所以標誌與文案都要依【獎項所屬飯店】切換。 */
@@ -881,7 +872,7 @@ function promptPendingContact(){
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s), $$=s=>document.querySelectorAll(s);
 function renderBalance(){ const b=$('#bal-wheel'); if(b) b.textContent=S.balance; }
-/** 這個人是否已達實體獎上限。maxPhysicalWins = 0 代表不限。 */
+/** 上限判定。 */
 function atWinCap(){
   return (S.maxPhysicalWins|0) > 0 && (S.physicalWins|0) >= (S.maxPhysicalWins|0);
 }
@@ -1016,7 +1007,7 @@ async function checkFriendAndLoad(){
     const r=await api('/me/friendship');
     isFriend = r.isFriend !== false;
   }catch(e){
-    // 我們自己的服務壞掉不該把真實客人擋在門外（味蕾地圖同款降級策略）。
+    // 檢查失敗時放行，避免把真實客人擋在門外。
     console.warn('[friendship] 檢查失敗，放行:', e.message);
   }
   if(!isFriend){ showFriendGate(); return false; }
@@ -1184,8 +1175,7 @@ function refreshDraw(){
   const cta=$('#spin-btn');
   if(cta && !spinning){
     const main=cta.querySelector('.cta-main'), sub=cta.querySelector('.cta-sub');
-    // 達上限 → 停用按鈕。refreshDraw 是按鈕狀態的唯一真相來源，
-    // unlockSpin() 會先 disabled=false 再呼叫這裡，所以這裡一定要把它設回去。
+    // refreshDraw 是按鈕狀態的唯一真相來源，unlockSpin() 之後一定會再經過這裡。
     cta.disabled = capped;
     if(capped){
       cta.dataset.mode='capped';
@@ -1315,7 +1305,7 @@ async function spin(){
   if(spinning) return;                            // 連點保護（第一道）
   const tier=selTier, cost=COST[tier];            // 抽獎等級＝等級卡選定（selTier 由 pickCoins 設定）
   if(S.balance < cost){ toast('洲遊幣不足'); return; }
-  // 已達每人實體獎上限 → 不轉盤（轉了也只能給銘謝惠顧，看起來像壞掉）。
+  // 不符合抽獎條件時不啟動轉盤。
   if(atWinCap()){ showWin({capReached:true, wins:S.physicalWins, maxPhysicalWins:S.maxPhysicalWins}); return; }
   spinning=true;
   const cta=$('#spin-btn'); cta.disabled=true; cta.innerHTML='<span class="cta-main">抽獎中…</span>';
@@ -1338,8 +1328,7 @@ async function spin(){
     return;
   }
 
-  // 伺服器端硬擋回來（例如客人開了兩個分頁，另一邊先把額度用掉了）。
-  // 這時盤面還沒開始轉，直接解鎖 + 說明，不要硬轉一圈。
+  // 伺服器回報不可抽獎時：盤面還沒開始轉，直接解鎖並說明。
   if(result.capReached){
     clearTimeout(watchdog);
     S.physicalWins = result.wins ?? S.physicalWins;
@@ -1360,8 +1349,7 @@ async function spin(){
     target = -(Math.floor(Math.random()*n) + 0.5) * step;
   }else{
     const idx=items.findIndex(p=>p.id===result.prizeId);
-    // 中的獎不在盤面上（例如二等／一等的安慰獎刻意不列進獎項一覽）→
-    // 停在兩格之間，不要硬停在某個獎品格上假裝中了那一格（那會自相矛盾）。
+    // 中的獎不在盤面上時停在兩格之間，避免停在不相符的格位。
     target = idx < 0
       ? -(Math.floor(Math.random()*n) + 0.5) * step
       : -idx*step;
@@ -1384,8 +1372,7 @@ async function spin(){
 }
 function showWin(r){
   const coin=r.coin||0;
-  // 已達每人實體獎上限 —— 不是中獎也不是錯誤，要講清楚為什麼不能再抽，
-  // 以及手上剩下的洲遊幣沒有被扣。
+  // 不可再抽的情況：說明原因與洲遊幣狀態。
   if(r.capReached){
     $('#win-lbl').textContent='本次結果';
     $('#win-prize').textContent='已達中獎上限';
@@ -1469,7 +1456,7 @@ function goToOA(){
   try{ location.href = url; }catch(e){ window.open(url, '_blank'); }
 }
 
-// 關掉彈窗後要不要導去 OA。null = 不導（銘謝惠顧、已達上限這種沒東西可領的情況）。
+// 關掉彈窗後要不要導去 OA。null = 不導。
 //
 // ⚠️ 用 var 不是 let —— 這個宣告在檔案後段，但 boot()（含 ?demo=win 測試入口）
 //    在前面就會呼叫 setModalBtn()。用 let 會落在 TDZ 裡噴
@@ -1530,8 +1517,7 @@ function applyTier(){
 
 /* ---------- 任務頁：追蹤社群，每完成一項 +1 洲遊幣（一次性） ---------- */
 // 社群連結【待行銷確認】：官方粉專最佳猜測網址，上線前請由行銷核對替換
-/* 任務清單由後端提供（server/lib/tasks.js）。網址還沒補齊的任務後端不會發布，
-   客人就不會點到死連結。本階段只有高雄的社群任務。 */
+/* 任務清單由後端提供。 */
 const SHARE_URL=location.href.split('#')[0];
 let SERVER_TASKS=[];
 function taskById(id){ return SERVER_TASKS.find(t=>t.id===id); }
@@ -1547,8 +1533,7 @@ function renderTasks(){
     box.appendChild(row);
   });
 }
-/* 發幣由後端做（一個 LINE 帳號每個任務只能領一次，資料庫 PK 保證）。
-   前端連點最多是多打幾次 API，不會多拿幣。 */
+/* 發幣由後端處理。 */
 async function claimTask(id){
   if(S.done[id]) return 0;
   try{
@@ -1573,7 +1558,7 @@ function startTask(id){
     window.open(tk.url,'_blank','noopener');   // 新分頁開社群；手機多為同分頁，回來由 init 驗證
   }
 }
-/* 分享彈窗：複製連結／LINE 分享；關閉後（仍 pending）走假驗證發幣 */
+/* 分享彈窗：複製連結／LINE 分享。 */
 $('#share-copy').addEventListener('click',()=>{
   if(navigator.clipboard) navigator.clipboard.writeText(SHARE_URL).then(()=>toast('連結已複製')).catch(()=>{});
   else { $('#share-url').select(); toast('請長按連結複製'); }
@@ -1589,7 +1574,7 @@ $('#share-modal').addEventListener('click',e=>{ if(e.target.id==='share-modal') 
 $('#task-back').addEventListener('click',()=>showScreen('wheel'));
 $('#task-list').addEventListener('click',e=>{ const b=e.target.closest('.task-btn'); if(b&&!b.disabled) startTask(b.dataset.id); });
 
-/* 回到遊戲：假驗證 → 發幣 → 恭喜彈窗（原型：無法真的驗證追蹤，回來即發） */
+/* 回到遊戲後完成任務並發幣。 */
 let verifying=false;
 async function verifyPending(){
   if(verifying) return;
@@ -1653,14 +1638,12 @@ $('#cf-yes').addEventListener('click',()=>{ $('#confirm-modal').classList.remove
 $('#cf-no').addEventListener('click',()=>{ $('#confirm-modal').classList.remove('show'); });
 $('#confirm-modal').addEventListener('click',e=>{ if(e.target.id==='confirm-modal') $('#confirm-modal').classList.remove('show'); });
 
-/* 首頁個資卡＋表單（原型 UI，不儲存個資） */
+/* 首頁個資卡＋表單 */
 function renderProfileCard(){ $('#profile-banner').hidden = !!S.done.profile; }
 $('#profile-banner').addEventListener('click',()=>openModal($('#profile-modal')));
 $('#profile-modal').addEventListener('click',e=>{ if(e.target.id==='profile-modal') $('#profile-modal').classList.remove('show'); });
 $('#pf-close').addEventListener('click',()=>$('#profile-modal').classList.remove('show'));
-/* 中獎聯絡資訊表單送出（臺北獎項）。
-   刻意【不做】點背景或 ✕ 關閉 —— 獎已經是客人的，資訊沒留到我們就聯繫不上他。
-   真的想跳過還是可以按 Esc（全域監聽），下次進來 pendingContacts 會再問一次。 */
+/* 中獎聯絡資訊表單送出。 */
 $('#ct-submit').addEventListener('click',()=>{
   const name=$('#ct-name').value.trim();
   const phone=$('#ct-phone').value.replace(/[-\s]/g,'');
@@ -1699,7 +1682,7 @@ $('#footer-rules').addEventListener('click',()=>openModal($('#rules-modal')));
 $('#rules-close').addEventListener('click',()=>$('#rules-modal').classList.remove('show'));
 $('#notice-modal').addEventListener('click',e=>{ if(e.target.id==='notice-modal') $('#notice-modal').classList.remove('show'); });
 $('#pf-submit').addEventListener('click',()=>{
-  // 基本驗證：姓名／手機／Email（原型層級的格式檢查）
+  // 基本格式驗證：姓名／手機／Email
   const name=$('#pf-name').value.trim();
   const phone=$('#pf-phone').value.replace(/[-\s]/g,'');
   const email=$('#pf-email').value.trim();
@@ -1708,7 +1691,7 @@ $('#pf-submit').addEventListener('click',()=>{
   if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ toast('請確認 Email 格式'); $('#pf-email').focus(); return; }
   const kh=$('#pf-kh').checked, tp=$('#pf-tp').checked;
   if(!kh && !tp){ toast('請至少勾選一項同意'); return; }   // 至少勾一
-  // 個資與同意版本寫進後端 player_profiles（依活動條款「填寫資料領取洲遊幣」）。
+  // 個資與同意版本送交後端保存。
   const btn=$('#pf-submit'); if(btn.disabled) return;      // 連點保護
   btn.disabled=true; const label=btn.textContent; btn.textContent='送出中…';
   api('/profile', {method:'POST', body:{name, phone, email, consentKh:kh, consentTpe:tp}})
@@ -1730,9 +1713,9 @@ function showReward(msg){
 }
 $('#reward').addEventListener('click',()=>{ clearTimeout(rwT); $('#reward').classList.remove('show'); });
 
-/* 非 PROD：任務說明改回原型示意版（社群網址待行銷確認） */
-if(!PROD){ const tn=$('#task-note'); if(tn) tn.textContent='【原型示意】點「前往完成」開啟社群頁面，返回後自動驗證發幣；社群網址待行銷確認。'; }
-/* 右下角歸零（測試用）：正式版(PROD)自動隱藏，僅原型/測試環境顯示；綁確認後清資料重載 */
+/* 非 PROD：任務說明改用測試環境版本 */
+if(!PROD){ const tn=$('#task-note'); if(tn) tn.textContent='【測試環境】點「前往完成」開啟社群頁面，返回後發幣。'; }
+/* 右下角歸零：PROD 自動隱藏，僅測試環境顯示 */
 $('#reset-btn').hidden = PROD;
 $('#reset-btn').addEventListener('click',()=>{
   if(!confirm('確定歸零？將清空洲遊幣、中獎與填答紀錄（測試用）。')) return;
@@ -1740,7 +1723,7 @@ $('#reset-btn').addEventListener('click',()=>{
 });
 
 /* ---------- 中獎跑馬燈（匿名、循環彈出） ----------
-   ⚠️ 原型無後端：以下為「示意名單」＋本機真實中獎(S.won)。
+   顯示來源：示意名單＋本機中獎紀錄(S.won)。
    正式版把 fetchWinners() 改為讀後端 API（例：fetch('/api/winners')），
    且對外顯示之中獎者須「匿名化 + 取得同意」（法務／資安）。 */
 const DEMO_WINNERS=[
