@@ -45,7 +45,8 @@ async function logAccess(username, action, req) {
 router.get("/prizes", async (_req, res) => {
   const { rows } = await query(
     `SELECT id, hotel, tier, slot, position, name, claim_mode, quota, issued,
-            weight, coin_reward, visible, active, coupon_link IS NOT NULL AS has_link
+            weight, coin_reward, visible, active, is_consolation,
+            coupon_link IS NOT NULL AS has_link
        FROM prizes ORDER BY tier, position`,
   );
   const byTier = {};
@@ -53,8 +54,10 @@ router.get("/prizes", async (_req, res) => {
     (byTier[r.tier] ??= []).push(r);
   }
   const summary = Object.entries(byTier).map(([tier, list]) => {
-    const live = list.filter((p) => p.active && p.visible && Number(p.weight) > 0
-      && (p.quota === 0 || p.issued < p.quota));
+    // 判斷條件要跟 /spin 的抽獎池完全一致，否則後台會謊報「這個等級沒開」。
+    // 安慰獎即使 visible = false 也抽得到（二等／一等不列進獎項一覽）。
+    const live = list.filter((p) => p.active && (p.visible || p.is_consolation)
+      && Number(p.weight) > 0 && (p.quota === 0 || p.issued < p.quota));
     // 抽獎是對 100 抽的，所以 weight 本身就是真實機率，不要再正規化。
     // 總和不足 100 的缺口 = 銘謝惠顧的機率。
     const total = live.reduce((s, p) => s + Number(p.weight), 0);
