@@ -875,8 +875,8 @@ function toast(msg){ $('#toast-msg').textContent=msg; $('#toast').classList.add(
   clearTimeout(toastT); toastT=setTimeout(()=>$('#toast').classList.remove('show'),2200); }
 
 /* ---------- visitor access gate ---------- */
-// Supplied by the server; the gate is disabled when it is not set.
-const ACCESS_PASSWORD = (CFG && CFG.previewPassword) || '';
+// The password is never sent here. It is checked by the server, which only
+// tells this page whether the gate is on at all.
 const ACCESS_SESSION_KEY='intercoins_access_granted';
 const INTRO_KEY='intercoins_intro_seen';
 // A hoisted function rather than a global const: the auto-grant path runs before that declaration would be initialised.
@@ -1139,11 +1139,25 @@ function maybeDemoWin(){
     try{ $('#intro-video').load(); }catch(e){}
   }
 })();
-$('#access-form').addEventListener('submit',e=>{
+$('#access-form').addEventListener('submit',async e=>{
   e.preventDefault();
   const field=$('#access-password'), error=$('#access-error');
-  if(ACCESS_PASSWORD && field.value===ACCESS_PASSWORD){ grantAccess(); return; }
-  error.textContent='密碼不正確，請再試一次。';
+  const btn=$('#access-form button[type=submit]');
+  error.textContent=''; if(btn) btn.disabled=true;
+  try{
+    const r=await fetch('/api/preview-access',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({password:field.value}),
+    });
+    if(r.ok){ grantAccess(); return; }
+    error.textContent = r.status===429
+      ? '嘗試次數過多，請稍後再試。'
+      : '密碼不正確，請再試一次。';
+  }catch(err){
+    error.textContent='連線失敗，請再試一次。';
+  }finally{
+    if(btn) btn.disabled=false;
+  }
   field.value=''; field.focus();
 });
 

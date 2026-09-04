@@ -96,3 +96,35 @@ test("the deep health check is behind the admin token", async () => {
   assert.ok(guard < firstQuery,
     "the admin check has to come before any operational data is gathered");
 });
+
+/**
+ * The preview password must be compared on the server and never sent out.
+ *
+ * It began hardcoded in the page. Moving it to an environment variable looked
+ * like a fix, but the server then handed the value to the browser through
+ * /api/config.js so the page could compare it locally -- which is the same
+ * exposure, just somewhere less obvious. Nothing had gone out only because the
+ * variable was still unset in production.
+ */
+test("the preview password is never sent to the browser", async () => {
+  const { readFileSync } = await import("node:fs");
+  const path = await import("node:path");
+  const here = import.meta.dirname;
+  const server = readFileSync(path.join(here, "..", "index.js"), "utf8");
+  const page = readFileSync(path.join(here, "..", "..", "public", "index.html"), "utf8");
+
+  // Just the config.js handler. Reading further would pick up the
+  // preview-access route, which is where the password is legitimately used.
+  const configStart = server.indexOf('app.get("/api/config.js"');
+  const config = server.slice(configStart, server.indexOf("});", configStart));
+  assert.ok(!/PREVIEW_PASSWORD\s*\|\|/.test(config),
+    "config.js is sending the password value; send only whether the gate is on");
+  assert.ok(/previewGate:\s*Boolean\(/.test(config),
+    "config.js should publish previewGate as a boolean");
+  assert.ok(!/previewPassword/.test(page),
+    "the page must not read a password from the server config");
+  assert.ok(/\/api\/preview-access/.test(page),
+    "the page should ask the server to check the password");
+  assert.ok(/timingSafeEqual/.test(server),
+    "compare the preview password in constant time");
+});

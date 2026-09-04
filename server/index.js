@@ -8,6 +8,7 @@
  */
 import express from "express";
 import { existsSync, readFileSync } from "node:fs";
+import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, extname, join, normalize, sep } from "node:path";
 
@@ -116,15 +117,55 @@ app.get("/api/config.js", (_req, res) => {
   res.type("application/javascript").set("Cache-Control", "no-store");
   res.send(`window.IC_CONFIG=${JSON.stringify({
     liffId: process.env.LIFF_ID || "",
-    // Password gate for internal previews, disabled when the variable is unset.
-    // The real barrier on the live campaign is signing in with LINE and adding
-    // the account as a friend; this gate is not what protects anything.
-    // It comes from here because a password written into a public file is
-    // readable by anyone who opens the page source.
-    previewPassword: process.env.PREVIEW_PASSWORD || "",
+    // Whether the internal preview gate is on -- never the password itself.
+    // Sending the password here would be no better than writing it into the
+    // page: anyone can read this file. The answer comes from
+    // POST /api/preview-access instead, which compares it server-side.
+    previewGate: Boolean(process.env.PREVIEW_PASSWORD),
     addFriendUrl: process.env.LINE_ADD_FRIEND_URL || "https://lin.ee/uKzkNI9",
     serverMode: hasDb,
   })};`);
+});
+
+/**
+ * Internal preview gate.
+ *
+ * The password is compared here and never leaves the server. An earlier version
+ * handed it to the browser so the page could compare it locally, which is the
+ * same exposure as writing it into the page -- anyone can read what the server
+ * sends. With no password configured the gate is simply off.
+ *
+ * This is a convenience for previewing before launch, not a security control:
+ * what actually protects the live campaign is signing in with LINE and adding
+ * the official account. The attempt limit below is only there so the gate
+ * cannot be brute-forced in a loop.
+ */
+const previewTries = new Map();
+
+app.post("/api/preview-access", (req, res) => {
+  const secret = process.env.PREVIEW_PASSWORD || "";
+  if (!secret) return res.json({ ok: true });
+
+  const ip = String(req.headers["x-forwarded-for"] || req.ip || "").split(",")[0].trim();
+  const now = Date.now();
+  if (previewTries.size > 5000) previewTries.clear();
+  const seen = previewTries.get(ip) || { n: 0, until: 0 };
+  if (seen.until > now) {
+    return res.status(429).json({ ok: false, retryAfter: Math.ceil((seen.until - now) / 1000) });
+  }
+
+  const given = Buffer.from(String(req.body?.password ?? ""));
+  const want = Buffer.from(secret);
+  const ok = given.length === want.length && timingSafeEqual(given, want);
+
+  if (ok) {
+    previewTries.delete(ip);
+    return res.json({ ok: true });
+  }
+  seen.n += 1;
+  if (seen.n >= 8) { seen.n = 0; seen.until = now + 60_000; }
+  previewTries.set(ip, seen);
+  return res.status(401).json({ ok: false });
 });
 
 app.use("/api/claim", claimRoutes);
