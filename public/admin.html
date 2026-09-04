@@ -108,6 +108,7 @@ tr:last-child td{border-bottom:none}
     <button role="tab" data-tab="contacts" aria-selected="true">待聯繫名單</button>
     <button role="tab" data-tab="winners">中獎名單</button>
     <button role="tab" data-tab="prizes">獎項與庫存</button>
+    <button role="tab" data-tab="growth">LINE 成長</button>
   </nav>
 
   <div id="pane"></div>
@@ -164,10 +165,12 @@ $('#logout').addEventListener('click', () => {
 /* ── 載入全部資料 ── */
 async function load(){
   try{
-    const [stats, contacts, prizes, winners] = await Promise.all([
+    const [stats, contacts, prizes, winners, growth] = await Promise.all([
       api('/stats'), api('/contacts'), api('/prizes'), api('/winners'),
+      // 好友洞察要打 LINE，失敗不能拖垮整頁 —— 給個空殼讓分頁自己說明原因
+      api('/growth').catch(e => ({ newPlayers:{}, daily:[], line:{ ok:false, reason:e.message } })),
     ]);
-    CACHE = { stats, contacts, prizes, winners };
+    CACHE = { stats, contacts, prizes, winners, growth };
     renderStats();
     render();
   }catch(e){
@@ -193,6 +196,51 @@ function renderStats(){
     + (s.push.claimed || 0) + ' 張券已領取';
 }
 
+/* ── LINE 成長 ──
+   兩組數字刻意分開呈現，因為它們量的不是同一件事：
+     LINE 好友數 = 官方帳號實際有多少人（LINE 給的，隔日才有）
+     新玩家     = 第一次打開遊戲的人（我們自己的 DB，即時）
+   加了好友但沒玩的人只會出現在前者，兩者本來就不會一樣。 */
+function renderGrowth(){
+  const g = CACHE.growth || {};
+  const np = g.newPlayers || {};
+  const L = g.line || {};
+
+  const lineBlock = L.ok
+    ? `<div class="cards">
+         <div class="stat"><div class="k">LINE 好友數</div><div class="v">${L.followers ?? '—'}</div></div>
+         <div class="stat"><div class="k">可觸及人數</div><div class="v">${L.targetedReaches ?? '—'}</div></div>
+         <div class="stat${L.blocks ? ' warn' : ''}"><div class="k">封鎖數</div><div class="v">${L.blocks ?? '—'}</div></div>
+       </div>
+       <div class="hint">以上是 <b>高雄洲際官方帳號</b>的實際好友數，資料日期 <b>${esc(L.date||'')}</b>
+         —— LINE 的統計<b>隔日才產出</b>，所以看不到今天的即時數字。</div>`
+    : `<div class="hint">⚠️ <b>LINE 好友數目前取不到</b>：${esc(L.reason || '未知原因')}<br>
+         常見原因：(1) 資料隔日才有，活動剛上線時還沒有；(2) 好友數太少時 LINE 不提供統計；
+         (3) token 沒有 Insight 權限。<br>
+         下面的「新玩家」是我們自己資料庫算的，不受影響。</div>`;
+
+  const rows = (g.daily || []).map(d =>
+    `<tr><td class="mono">${esc(d.date)}</td><td class="mono">${d.players}</td></tr>`).join('');
+
+  $('#pane').innerHTML = `
+    <h3 style="margin:18px 0 10px;font-size:15px">LINE 官方帳號好友</h3>
+    ${lineBlock}
+    <h3 style="margin:26px 0 10px;font-size:15px">遊戲新玩家（第一次打開遊戲的人）</h3>
+    <div class="cards">
+      <div class="stat"><div class="k">今天</div><div class="v">${np.today ?? 0}</div></div>
+      <div class="stat"><div class="k">昨天</div><div class="v">${np.yesterday ?? 0}</div></div>
+      <div class="stat"><div class="k">近 7 天</div><div class="v">${np.last7 ?? 0}</div></div>
+      <div class="stat"><div class="k">活動累計</div><div class="v">${np.total ?? 0}</div></div>
+    </div>
+    <div class="tablewrap" style="margin-top:14px"><table>
+      <thead><tr><th>日期（台北時間）</th><th>新玩家</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="2"><div class="empty">還沒有資料</div></td></tr>'}</tbody>
+    </table></div>
+    <div class="hint">「新玩家」＝第一次用 LINE 登入進遊戲的人。
+      <b>必須先加好友才能進遊戲</b>，所以這個數字是活動實際帶進來的人；
+      但加了好友卻沒玩遊戲的人不會算在這裡，會反映在上面的 LINE 好友數。</div>`;
+}
+
 /* ── 分頁 ── */
 document.querySelectorAll('nav button').forEach(b => b.addEventListener('click', () => {
   TAB = b.dataset.tab;
@@ -203,6 +251,7 @@ document.querySelectorAll('nav button').forEach(b => b.addEventListener('click',
 function render(){
   if(TAB === 'contacts') renderContacts();
   else if(TAB === 'winners') renderWinners();
+  else if(TAB === 'growth') renderGrowth();
   else renderPrizes();
 }
 

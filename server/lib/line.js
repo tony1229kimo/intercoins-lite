@@ -52,6 +52,59 @@ export async function verifyPushToken(hotel) {
  * GET /v2/bot/profile/:userId —— 200 = 已加好友、404 = 未加好友。
  * 這是唯一不用額外授權就能問「這個人是不是我的好友」的方法。
  */
+/**
+ * 官方帳號的好友數（LINE Insight API）。
+ *
+ * GET /v2/bot/insight/followers?date=yyyyMMdd
+ *   followers        累計好友數（扣掉封鎖的）
+ *   targetedReaches  可觸及人數（推播打得到的）
+ *   blocks           封鎖數
+ *
+ * ⚠️ 三個限制，UI 要據實說明，不要假裝拿得到：
+ *   1. **資料隔日才有** —— 今天的數字最快明天才會出現，date 不能填今天
+ *   2. 好友數太少時 LINE 會回 status:"unavailable"（不是錯誤，是它不給）
+ *   3. 只能查最近 60 天
+ *
+ * 所以這裡從 daysBack 天前往回試，拿到第一筆 status:"ready" 就回傳。
+ */
+export async function getFollowerInsight(hotel, { daysBack = 1, maxTry = 5 } = {}) {
+  const token = tokenFor(hotel);
+  if (!token) return { ok: false, reason: `LINE_MESSAGING_ACCESS_TOKEN_${hotel} 未設定` };
+
+  const ymd = (d) => `${d.getUTCFullYear()}`
+    + String(d.getUTCMonth() + 1).padStart(2, "0")
+    + String(d.getUTCDate()).padStart(2, "0");
+
+  let lastReason = "沒有可用的資料";
+  for (let i = 0; i < maxTry; i++) {
+    // 用台北時間的日界線推算，避免 UTC 換日造成差一天
+    const d = new Date(Date.now() + 8 * 3600_000 - (daysBack + i) * 86400_000);
+    const date = ymd(d);
+    try {
+      const resp = await fetch(
+        `https://api.line.me/v2/bot/insight/followers?date=${date}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => "");
+        lastReason = `HTTP ${resp.status} ${body.slice(0, 160)}`;
+        continue;
+      }
+      const j = await resp.json();
+      if (j.status !== "ready") { lastReason = `LINE 回 status=${j.status}`; continue; }
+      return {
+        ok: true, date,
+        followers: j.followers ?? null,
+        targetedReaches: j.targetedReaches ?? null,
+        blocks: j.blocks ?? null,
+      };
+    } catch (err) {
+      lastReason = err instanceof Error ? err.message : String(err);
+    }
+  }
+  return { ok: false, reason: lastReason };
+}
+
 export async function checkFriendship(hotel, userId) {
   const token = tokenFor(hotel);
   if (!token) {

@@ -5,10 +5,13 @@
 import { asyncRouter } from "../lib/router.js";
 import { query } from "../db.js";
 import { requireAdmin, tokenFor, adminUsers, adminEnabled } from "../middleware/adminAuth.js";
-import { pushRewardCoupon } from "../lib/line.js";
+import { pushRewardCoupon, getFollowerInsight } from "../lib/line.js";
 import { TIER_LABEL } from "../prizes.js";
 
 const router = asyncRouter();
+
+// 好友洞察查的是【高雄洲際】的官方帳號 —— 客人是從那裡加好友進來的。
+const OA_HOTEL = "KH";
 
 /** 帳密登入 → 換取 token。密碼只在這一次進出，之後都用推導出的 token。 */
 router.post("/login", async (req, res) => {
@@ -89,6 +92,49 @@ router.patch("/prizes/:id", async (req, res) => {
       WHERE id = $1 RETURNING *`, values);
   if (!rows.length) return res.status(404).json({ error: "not_found" });
   res.json({ ok: true, prize: rows[0] });
+});
+
+/**
+ * 成長數字：LINE 官方帳號好友數 ＋ 每日新玩家。
+ *
+ * 兩者是不同的東西，UI 要分開講：
+ *   followers  = LINE 官方帳號的實際好友數（LINE 給的，隔日才有）
+ *   newPlayers = 第一次打開遊戲的人（我們自己的 DB，即時且精確）
+ * 加了好友但沒玩遊戲的人只會算進前者，所以兩個數字本來就不會一樣。
+ */
+router.get("/growth", async (_req, res) => {
+  const [{ rows: daily }, { rows: [totals] }, line] = await Promise.all([
+    query(
+      `SELECT (created_at AT TIME ZONE 'Asia/Taipei')::date AS day,
+              count(*)::int AS players
+         FROM players
+        WHERE created_at > now() - interval '30 days'
+        GROUP BY 1 ORDER BY 1 DESC`,
+    ),
+    query(
+      // ⚠️ FILTER 後面的 ::int 一定要整個括起來再轉型，
+      //    不然 :: 會綁到 FILTER 的括號上，語意不是你想的那樣。
+      `SELECT count(*)::int AS total,
+              (count(*) FILTER (
+                WHERE (created_at AT TIME ZONE 'Asia/Taipei')::date
+                    = (now() AT TIME ZONE 'Asia/Taipei')::date))::int AS today,
+              (count(*) FILTER (
+                WHERE (created_at AT TIME ZONE 'Asia/Taipei')::date
+                    = (now() AT TIME ZONE 'Asia/Taipei')::date - 1))::int AS yesterday,
+              (count(*) FILTER (WHERE created_at > now() - interval '7 days'))::int AS last7
+         FROM players`,
+    ),
+    getFollowerInsight(OA_HOTEL).catch((e) => ({ ok: false, reason: String(e) })),
+  ]);
+
+  res.json({
+    newPlayers: totals,
+    daily: daily.map((d) => ({
+      date: d.day instanceof Date ? d.day.toISOString().slice(0, 10) : String(d.day).slice(0, 10),
+      players: d.players,
+    })),
+    line,
+  });
 });
 
 /** 營運總覽。 */
