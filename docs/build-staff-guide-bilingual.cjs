@@ -397,17 +397,19 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
 }
 {
   const s = slide("七、常見問題與標準回答（2/3）", "FAQ & Suggested Replies (2 of 3)");
-  qa(s, { y: 1.3, h: 1.3,
+  qa(s, { y: 1.22, h: 1.12,
     zh: "我還沒留聯絡資料，要怎麼補？", en: "I haven't submitted my contact details yet.",
     azh: "請再打開一次活動頁面，系統會自動提醒您填寫。",
     aen: "Please reopen the campaign page — the system will prompt you again automatically." });
-  qa(s, { y: 2.75, h: 1.3,
+  qa(s, { y: 2.44, h: 1.24,
     zh: "為什麼我一直抽到餐飲 85 折？", en: "Why do I keep getting the 15% dining discount?",
     azh: "本活動每次抽獎都一定會中獎，餐飲 85 折是保底獎項，其他獎品則有名額限制，發完為止。",
     aen: "Every spin wins something. The 15% dining discount is the guaranteed baseline; other prizes are limited and awarded while stocks last." });
-  callout(s, { x: 0.55, y: 4.35, w: 8.9, h: 0.7, tone: "ok", icon: "💬",
-    zh: "重點講「每抽必中，最少也有 85 折」—— 不要說「沒中獎」，現在沒有這種結果。",
-    en: "Emphasise that every spin wins something. There is no longer a \"no prize\" outcome." });
+  qa(s, { y: 3.78, h: 1.32,
+    zh: "獎項一覽上的獎品抽不到？我抽到的又沒列在上面？",
+    en: "I can't win what's listed — and what I won isn't on the list?",
+    azh: "獎項一覽列的是本活動的獎品種類，部分獎品已經送完；餐飲 85 折是保底獎項，不在清單上但一定拿得到。實際以抽獎結果為準。",
+    aen: "The list shows the prize types in this campaign; some are already fully claimed. The 15% dining discount is the guaranteed baseline and is not listed. The draw result is what counts." });
 }
 {
   const s = slide("七、常見問題與標準回答（3/3）", "FAQ & Suggested Replies (3 of 3)");
@@ -486,8 +488,8 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
   const cards = [
     ["📩", "有優惠券", "Coupon Issued", "券自動進客人 LINE\n出示兌換碼 → 櫃檯核銷", "Coupon in LINE → redeem at counter", KH_BG, KH_FG],
     ["📞", "只有兌換碼", "Code Only", "臺北或住宿 → 不核銷，等聯繫\n其餘高雄的獎 → 受理，回報主管", "Taipei / room stay → no. Others → accept & report", TPE_BG, TPE_FG],
-    ["🎁", "每抽必中", "Every Spin Wins", "每次都扣洲遊幣，但一定中獎\n最少也會拿到餐飲 85 折", "Coins deducted, but every spin wins — min. 15% dining discount", OK_BG, OK],
-    ["🚫", "絕不能說", "Never Disclose", "中獎機率 · 剩餘數量 · 其他客人的資料\n不確定就轉給主管，不要自行承諾", "Odds · stock · other guests' data — escalate if unsure", BAD_BG, BAD],
+    ["🎁", "每抽必中", "Every Spin Wins", "每次扣幣但一定中獎，最少 85 折\n85 折不在清單上；清單含已送完的獎", "Every spin wins — min. 15% discount (unlisted); list includes sold-out items", OK_BG, OK],
+    ["🚫", "絕不能說", "Never Disclose", "中獎機率 · 剩餘數量 · 其他客人資料\n不確定就轉主管，不要自行承諾", "Odds · stock · other guests' data — escalate if unsure", BAD_BG, BAD],
   ];
   cards.forEach(([icon, zh, en, dzh, den, bg, fg], i) => {
     const x = 0.6 + (i % 2) * 4.45, y = 1.42 + Math.floor(i / 2) * 1.78;
