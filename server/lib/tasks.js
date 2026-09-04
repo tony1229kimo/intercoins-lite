@@ -8,11 +8,10 @@
  * LINE account can claim each task only once.
  */
 export const SOCIAL = {
-  ig_khh: "https://www.instagram.com/intercontinental_kaohsiung/",   // confirmed by marketing
+  ig_khh: "https://www.instagram.com/intercontinental_kaohsiung/",
   fb_khh: "https://www.facebook.com/ICKaohsiung/",
   // Taipei. These two tasks raise the per-person ceiling so the top tier is
   // reachable, and send traffic to the Taipei channels.
-  // These two URLs came from an early draft. Marketing still needs to confirm they are the official accounts.
   ig_tpe: "https://www.instagram.com/intercontinental_taipei/",
   fb_tpe: "https://www.facebook.com/ICTaipei/",
   // Kaohsiung, TASTE

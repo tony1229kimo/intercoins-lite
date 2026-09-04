@@ -81,9 +81,14 @@ const BANNED_ALL = [
 
 /** Additionally banned in index.html, which guests open. */
 const BANNED_CUSTOMER = [
+  // 2026-09-04: the first version of this rule listed exact phrasings, and the
+  // page said it slightly differently -- "待法務確認" rather than "需法務" --
+  // so four editorial placeholders sat in the live terms, one of them reading
+  // "final interpretation wording pending legal confirmation". Match the shape
+  // of the admission, not one way of writing it.
   ["unreviewed-copy admission",
-   /AI 草稿|需法務|待查證|恐受限|尚未審核|未定案|草稿/,
-   "never admit the copy is unreviewed: it tells guests the terms may not hold"],
+   /AI 草稿|草稿|恐受限|尚未審核|未定案|待(?:補|查證|確認|法務|核)|[需待](?:法務|審核|確認)/,
+   "never admit the copy is unreviewed, and never ship a 待補 placeholder: it tells guests the terms are unfinished"],
   ["weak-protection admission",
    /假驗證|無法真的驗證|回來即發|輕量存取門檻|保護應改由|原型/,
    "never write that a check is fake or that protection is inadequate"],
