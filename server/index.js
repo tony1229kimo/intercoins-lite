@@ -100,6 +100,10 @@ app.get("/api/config.js", (_req, res) => {
   res.type("application/javascript").set("Cache-Control", "no-store");
   res.send(`window.IC_CONFIG=${JSON.stringify({
     liffId: process.env.LIFF_ID || "",
+    // 內部預覽用的密碼閘。沒設 PREVIEW_PASSWORD 就停用 ——
+    // 正式上線的門檻是 LINE 登入 + 加好友，本來就不靠這道閘。
+    // ⚠️ 不要把密碼寫死在 public/index.html：那是公開原始碼，按 F12 就看得到。
+    previewPassword: process.env.PREVIEW_PASSWORD || "",
     addFriendUrl: process.env.LINE_ADD_FRIEND_URL || "https://lin.ee/uKzkNI9",
     serverMode: hasDb,
   })};`);

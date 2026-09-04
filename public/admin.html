@@ -128,7 +128,7 @@ const fmt = t => t ? new Date(t).toLocaleString('zh-TW',{month:'2-digit',day:'2-
 async function api(path){
   const r = await fetch('/api/admin' + path, { headers:{ Authorization:'Bearer ' + TOKEN } });
   if(r.status === 401) throw Object.assign(new Error('密碼錯誤'), { auth:true });
-  if(r.status === 503) throw new Error('後台尚未啟用（Zeabur 未設定 ADMIN_TOKEN）');
+  if(r.status === 503) throw new Error('後台尚未啟用，請聯繫系統管理員');
   if(!r.ok) throw new Error('HTTP ' + r.status);
   return r.json();
 }
@@ -197,7 +197,7 @@ function renderStats(){
 }
 
 /* ── 活動成效 ──
-   給 Tony 拿去對上報告用的。五個區塊：漏斗 / 社群任務 / LINE 好友 / 每日趨勢 / 獎品券。
+   五個區塊：漏斗 / 社群任務 / LINE 好友 / 每日趨勢 / 獎品券。
 
    有三個數字很容易被誤讀，UI 上都寫了但這裡再記一次：
      1. LINE 好友數 ≠ 新玩家 —— 前者含「加了好友但沒玩」的人，且隔日才有資料
@@ -355,7 +355,7 @@ function renderContacts(){
 
 /* ── 中獎名單 ──
    兩館共用一份、用館別篩選 —— 高雄櫃檯要能查客人手上的券是不是自家發的，
-   臺北的人要知道該聯繫誰，所以不拆成兩份名單（Tony 2026-09-01）。 */
+   各館都要知道該聯繫誰，所以不拆成兩份名單。 */
 function renderWinners(){
   const rows = CACHE.winners.winners || [];
   $('#pane').innerHTML = `

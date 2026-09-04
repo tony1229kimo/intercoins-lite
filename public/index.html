@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Noto+Serif+TC:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- LINE LIFF SDK：在 LINE App 內以 LIFF 開啟時提供真實登入身分（getProfile / getIDToken） -->
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<!-- 伺服器餵下來的設定（LIFF_ID 等）。不寫死在 repo，換 LIFF 只要改 Zeabur 環境變數。 -->
+<!-- 伺服器餵下來的執行期設定，不寫死在前端。 -->
 <script src="/api/config.js"></script>
 <style>
 :root{
@@ -781,12 +781,9 @@ img.li-av{background:none}
 
 <script>
 /* ---------- data ---------- */
-/* 轉盤獎項由後端 GET /api/state 提供（來源：行銷的「獎項一覽表.xlsx」→ Postgres）。
-   ⚠️ 前端【拿不到】機率與庫存 —— 中獎是後端算的，這裡只負責把轉盤停在後端指定的格位。
-   這是刻意的：機率與剩餘數量不能讓客人從 F12 看到，抽獎結果也不能由前端決定。 */
+/* 轉盤內容由後端 GET /api/state 提供；前端只負責呈現。 */
 let PRIZES = {1:[], 3:[], 5:[]};
-/* 該等級是否還有獎可抽（後端算）。目前【不用來擋按鈕】—— 獎發完時走的是
-   「銘謝惠顧」流程（轉盤照轉、不扣幣），比直接鎖住按鈕的體驗好。保留給日後需要時用。 */
+/* 由後端提供的等級狀態，保留給日後需要時用。 */
 let TIER_OPEN = {1:false, 3:false, 5:false};
 const TIER_RN = {5:'一等獎', 3:'二等獎', 1:'三等獎'};   // 一等獎最大(投5)、金銀銅
 
@@ -893,7 +890,8 @@ function toast(msg){ $('#toast-msg').textContent=msg; $('#toast').classList.add(
   clearTimeout(toastT); toastT=setTimeout(()=>$('#toast').classList.remove('show'),2200); }
 
 /* ---------- visitor access gate ---------- */
-const ACCESS_PASSWORD='20260815';
+// 密碼由伺服器餵；沒設就停用密碼閘，不寫死在這份公開原始碼裡。
+const ACCESS_PASSWORD = (CFG && CFG.previewPassword) || '';
 const ACCESS_SESSION_KEY='intercoins_access_granted';
 const INTRO_KEY='intercoins_intro_seen';
 // 用 hoisted 函式取代全域 const REDUCE（後者宣告在後面，自動 grant 路徑會落在其 TDZ 前）
@@ -953,7 +951,7 @@ function playIntro(){
    真實身分只在「LINE App 內以 LIFF 開啟」時取得（liff.getProfile）；
    其餘環境（電腦預覽、密碼閘門）一律 fallback 成清楚標示的「示意訪客」，不偽造真人。
    身分僅前端顯示，不寫入 S/localStorage（PII 最小化）。 */
-const LIFF_ID = CFG.liffId || '';   // 由 /api/config.js 提供（Zeabur 環境變數 LIFF_ID）
+const LIFF_ID = CFG.liffId || '';   // 由 /api/config.js 提供
 let liffReady=false;
 function setIdentity(name, pic){
   const nameEl=$('#li-name'), tag=$('#li-tag'), av=$('#li-av');
@@ -1099,15 +1097,9 @@ async function initLiff(){
 
    密碼閘只留給「還沒設 LIFF」的內部預覽。正式上線（有 LIFF_ID）時真正的門檻是
    LINE 登入 + 加好友，不該再叫客人輸入密碼。 */
-/* ---------- 測試用：假裝中三等獎 ----------
-   用途：在真實 LINE App 裡驗證「中獎後跳轉回高雄洲際 OA」實際會跳到哪。
-   純前端演示 —— 不呼叫任何 API、不建立中獎紀錄、不扣洲遊幣、不扣獎品庫存。
-   獎品名稱刻意標【測試】，客人萬一誤入也不會以為自己中獎。
-   開啟方式：在 LIFF 網址後面加 ?demo=win（中實體小物）或 ?demo=consol（中 85 折） */
+/* 內部測試用的展示畫面（純前端，不寫入任何資料）。 */
 const DEMO_CASES = {
-  // 中實體小物（三等獎，目前 50% 會是這兩樣之一）
   win:    { prize:'【測試】高雄洲際酒店 洲賀熊',              tier:1, tierLabel:'三等獎' },
-  // 中安慰獎（目前最常見的結果，二等／一等更是 100%）
   consol: { prize:'【測試】高雄洲際酒店 餐飲 85 折優惠禮遇',  tier:3, tierLabel:'二等獎' },
 };
 
@@ -1170,7 +1162,7 @@ function maybeDemoWin(){
 $('#access-form').addEventListener('submit',e=>{
   e.preventDefault();
   const field=$('#access-password'), error=$('#access-error');
-  if(field.value===ACCESS_PASSWORD){ grantAccess(); return; }
+  if(ACCESS_PASSWORD && field.value===ACCESS_PASSWORD){ grantAccess(); return; }
   error.textContent='密碼不正確，請再試一次。';
   field.value=''; field.focus();
 });
@@ -1185,9 +1177,7 @@ function pickCoins(coins){
 // 依目前選擇刷新控制區：卡片選中態、主 CTA 標籤與枚數、可負擔差額提示
 function refreshDraw(){
   const coins=COST[selTier];                       // 目前等級所需枚數＝投入枚數
-  // ⚠️ 沒庫存的等級【刻意不鎖】（Tony 2026-09-02）——
-  //    一等／二等要留在畫面上當目標，客人才有動力存洲遊幣。
-  //    抽到空的等級走的是 soldOut 路徑，本來就不扣幣，所以不會傷到客人。
+  // 等級卡一律可選；能不能抽由後端判定。
   $$('.tier-card').forEach(c=>c.setAttribute('aria-checked', +c.dataset.coins===coins ? 'true':'false'));
   const afford=S.balance>=coins;
   const capped=atWinCap();
@@ -1292,8 +1282,7 @@ function setWheel(deg, trans){
   for(const el of [$('#prize'), $('#labels')]){ el.style.transition=trans; el.style.transform=`rotate(${deg}deg)`; }
 }
 function buildRing(tier){ currentTier=tier; currentItems=PRIZES[tier]||[]; renderLabels(); }
-/* ⚠️ 這裡【故意】沒有 weightedPick —— 中獎格由後端 /api/spin 決定並回傳 slot。
-   前端抽獎等於把機率和庫存交給客人的瀏覽器，改個變數就能中頭獎。 */
+/* 中獎結果一律由後端決定並回傳，前端不參與計算。 */
 /* 轉盤旋轉引擎（rAF 累加）：常態持續慢轉；抽獎時疊加一段 easeOut 快轉→減速收在中獎格→續慢轉 */
 let spinning=false, wheelAngle=0, spinState=null, lastT=null, idleHold=0;
 const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1338,7 +1327,7 @@ async function spin(){
 
   let result;
   try{
-    // 中獎結果、扣幣、扣庫存、開票、推播全部在後端一個 transaction 內完成。
+    // 抽獎的所有處理都在後端一次完成。
     result = await api('/spin', { method:'POST', body:{ tier } });
   }catch(e){
     clearTimeout(watchdog); unlockSpin();
@@ -1422,8 +1411,7 @@ function showWin(r){
     wt.style.setProperty('--tag-bg','#8C8578');
     $('#modal .code').innerHTML='本次沒有中獎'
       + `<span style="display:block;margin-top:8px;font-size:12px;color:#686869;letter-spacing:0">`
-      // 兩種銘謝惠顧現在都會扣幣（Tony 2026-09-04）。
-      // 一律看 costCharged 的實際值來寫，不要寫死 —— 之後若又改回不扣，文案會自己跟上。
+      // 文案一律看 costCharged 的實際值，不要寫死 —— 規則改了文案會自己跟上。
       + (r.missed ? '' : '本等級獎項已全數送出。')
       + (r.costCharged
           ? `已扣除 <span class="em">${r.costCharged} 枚洲遊幣</span>。`
@@ -1437,8 +1425,7 @@ function showWin(r){
     openModal($('#modal'));
     return;
   }
-  // claim_mode='contact' 的獎：不發連結，直接跳「留聯絡資訊」表單。
-  // 臺北全部（細則未定案）＋ 高雄的兩項住宿大獎（要排入住日期）—— Tony 2026-09-01。
+  // claim_mode='contact' 的獎：不發連結，直接跳「留聯絡資訊」表單，由專人後續聯繫。
   if(!coin && r.claimMode==='contact'){
     PENDING_CONTACTS=[{drawId:r.drawId, prize:r.prize, tier:r.tier, code:r.code, hotel:r.hotel}];
     openContactForm(PENDING_CONTACTS[0]);
@@ -1463,7 +1450,7 @@ function showWin(r){
       + `請至 LINE 對話視窗點「領取我的獎品」完成領取${detail}</span>`;
   }else{
     // 推播失敗（客人封鎖了官方帳號、LINE 暫時異常…）。獎還是他的 —— 給兌換碼走櫃檯，
-    // 不要騙他「已發送」讓他翻遍聊天室找不到。後台可用 /api/admin/draws/:id/repush 補送。
+    // 不要騙他「已發送」讓他翻遍聊天室找不到。
     $('#modal .code').innerHTML = `兌換碼（請至櫃檯出示）<b>${r.code||''}</b>`
       + `<span style="display:block;margin-top:8px;font-size:12px;color:#B14A4A">`
       + `優惠券暫時無法發送到你的 LINE，請截圖此兌換碼並洽現場服務人員${detail}</span>`;
@@ -1474,11 +1461,8 @@ function showWin(r){
 function openModal(m){ m.classList.add('show');
   const c=m.querySelector('.card'); if(c){ c.tabIndex=-1; c.focus({preventScroll:true}); } }
 /**
- * 導回高雄洲際酒店的 LINE 官方帳號（Tony 2026-09-02）。
- *
- * 中獎的券就發在那個聊天室裡，所以抽完就把客人送過去，不要讓他卡在彈窗。
- * 用 CFG.addFriendUrl（lin.ee 短網址）—— LINE 內外都能正確開啟 OA，
- * 比 liff.closeWindow() 可靠：從 QR 掃進來的話 closeWindow 不一定回得到聊天室。
+ * 導回官方帳號。中獎的券就發在那個聊天室裡。
+ * 用短網址而非 liff.closeWindow() —— 從 QR 掃進來時 closeWindow 不一定回得到聊天室。
  */
 function goToOA(){
   const url = (CFG && CFG.addFriendUrl) || 'https://lin.ee/uKzkNI9';
