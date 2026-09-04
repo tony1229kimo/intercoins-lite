@@ -82,3 +82,48 @@ export function requireAdmin(req, res, next) {
   req.adminUser = who.username;
   next();
 }
+
+/* ──────────────────────────────────────────────────────────────
+ * 後台【頁面】的門禁
+ *
+ * /admin 的 HTML 從前是誰都拿得到的：登入表單擋得住資料，擋不住原始碼，
+ * 整份後台的結構、欄位名與端點都攤在外面。現在頁面本身也要先驗身分。
+ *
+ * ⚠️ 這個 cookie 只用來決定「要不要把 HTML 吐出去」，
+ *    /api/admin/* 一律維持 Bearer —— cookie 不能拿來操作任何資料，
+ *    所以不存在 CSRF 面（別人的網站誘導瀏覽器發請求也只會拿到一頁 HTML）。
+ * ────────────────────────────────────────────────────────────── */
+export const ADMIN_COOKIE = "ic_admin";
+
+function cookiesOf(req) {
+  const out = {};
+  for (const part of String(req.headers.cookie || "").split(";")) {
+    const eq = part.indexOf("=");
+    if (eq > 0) out[part.slice(0, eq).trim()] = part.slice(eq + 1).trim();
+  }
+  return out;
+}
+
+/** 這個請求可以拿到後台頁面嗎？只看 cookie，不看 Bearer。 */
+export function adminPageAllowed(req) {
+  const token = cookiesOf(req)[ADMIN_COOKIE];
+  if (!token) return false;
+  const master = process.env.ADMIN_TOKEN;
+  if (master && sameToken(token, master)) return true;
+  return adminUsers().some((u) => sameToken(token, u.token));
+}
+
+/** 登入成功後發給瀏覽器的門禁 cookie。 */
+export function setAdminCookie(req, res, token) {
+  res.cookie(ADMIN_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "strict",
+    secure: req.secure || req.header("x-forwarded-proto") === "https",
+    path: "/",
+    maxAge: 12 * 60 * 60 * 1000,
+  });
+}
+
+export function clearAdminCookie(res) {
+  res.clearCookie(ADMIN_COOKIE, { path: "/" });
+}

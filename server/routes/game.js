@@ -23,9 +23,9 @@ const OA_HOTEL = "KH";
  * 這個上限是 2026-09-02 為了止血才加的：當時洲遊幣是全額退幣，
  * 客人手上的每一枚幣都會循環換成實體獎，4 個人就能把三等獎清空。
  *
- * 同日稍後把洲遊幣機率設成 0% 之後，退幣循環就沒了 ——
+ * 同日稍後調整了轉盤設定，退幣循環就沒了 ——
  * 每抽必扣、每人上限 8 枚幣，消耗量自然封頂，上限失去必要性。
- * Tony 2026-09-02 決定關掉（三等獎還有 78 個名額）。
+ * Tony 2026-09-02 決定關掉。
  *
  * 功能保留：要重新開啟就在 Zeabur 設 MAX_PHYSICAL_WINS=2（或其他數字），
  * 記得按「儲存並重新部署」—— 容器只在啟動時讀 process.env。
@@ -296,7 +296,7 @@ router.post("/spin", liffAuth, async (req, res) => {
       // 【要扣幣】（Tony 2026-09-04：公司決定要有銘謝惠顧機制，前台會對客人說明）。
       // 原本刻意不扣，理由是「獎都沒了還收幣」客訴風險高；
       // 現在改成扣，是為了讓一等／二等留在畫面上當目標時仍有成本，
-      // 而三等獎維持 100% 必中（洲賀熊 / 旅行外幣收納錢包），客人一定拿得到東西。
+      // 而較低的等級仍有實體獎可拿，客人不會空手而回。
       if (!pool.length) {
         await addCoins(client, req.lineUserId, -cost, "spin_miss", `tier${tier}_soldout`);
         return { soldOut: true, cost, balance: player.balance - cost };
@@ -313,7 +313,7 @@ router.post("/spin", liffAuth, async (req, res) => {
       // 抽到權重缺口 → 改發安慰獎（85 折餐飲優惠，不限量）。
       // 這就是「85 折取代銘謝惠顧」的實作：只要池子裡有安慰獎，
       // 客人就一定拿得到東西，不會出現空手而回。
-      // 獎品全部發完時，池子裡只剩安慰獎 → 100% 發它。
+      // 獎品全部發完時，池子裡就只剩安慰獎。
       const picked = weightedPick(pool, { outOf: 100 });
       const prize = picked ?? pool.find((x) => x.is_consolation);
 

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<title>洲遊幣 Lite · 後台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --gold:#935D08; --ink:#2B2620; --muted:#6B665B;
+  --surface:#FFFFFF; --bg:#F5F3EE; --line:#E4E0D8; --danger:#B14A4A;
+  --serif:"Noto Serif TC",Georgia,serif; --sans:"Inter","Noto Sans TC",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.6}
+main{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+.box{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;padding:32px 26px;text-align:center;box-shadow:0 12px 40px rgba(43,38,32,.1)}
+h1{font-family:var(--serif);font-size:20px;letter-spacing:2px;margin-bottom:4px;font-weight:600}
+.sub{font-size:11px;color:var(--muted);letter-spacing:2px;margin-bottom:22px}
+input{width:100%;border:1px solid var(--line);border-radius:8px;padding:11px 13px;
+  font-size:15px;font-family:inherit;color:var(--ink);background:#fff}
+input:focus{outline:none;border-color:var(--gold)}
+.btn{width:100%;margin-top:12px;background:var(--ink);color:#fff;border:none;border-radius:8px;
+  padding:12px;font-size:15px;letter-spacing:2px;font-family:inherit;cursor:pointer}
+.btn:active{transform:scale(.99)}
+.btn[disabled]{opacity:.6;cursor:default}
+.hint{margin-top:14px;font-size:11.5px;color:var(--muted)}
+.err{color:var(--danger);font-size:12.5px;margin-top:10px;min-height:18px}
+</style>
+</head>
+<body>
+
+<main>
+  <div class="box">
+    <div class="sub">I N T E R C O I N S</div>
+    <h1>洲遊幣 Lite 後台</h1>
+    <div class="sub" style="margin-bottom:20px">請輸入您的後台帳號</div>
+    <input id="usr" type="text" placeholder="帳號" autocomplete="username" style="margin-bottom:10px" />
+    <input id="pwd" type="password" placeholder="密碼" autocomplete="current-password" />
+    <button class="btn" id="go">進 入</button>
+    <div class="hint">本頁含中獎者個人資料，僅限授權人員使用；<br>每次調閱都會留下紀錄。</div>
+    <div class="err" id="err" role="alert"></div>
+  </div>
+</main>
+
+<script>
+/**
+ * Sign-in page for the admin panel.
+ *
+ * This page is all an unauthenticated visitor can fetch. The panel itself --
+ * its markup, its fields and every endpoint it calls -- is only served once
+ * the server has seen a valid session, so none of that structure is public.
+ *
+ * A successful sign-in gets two things back: a cookie, set by the server, that
+ * releases the panel HTML, and a token that the panel sends as a bearer header
+ * on every data call. The cookie alone can fetch the page but cannot read or
+ * change any data.
+ */
+const $ = (s) => document.querySelector(s);
+const KEY = 'ic_admin_token', KEY_U = 'ic_admin_user';
+
+async function login(){
+  const u = $('#usr').value.trim(), p = $('#pwd').value;
+  if(!u || !p){ $('#err').textContent = '請輸入帳號與密碼'; return; }
+  $('#err').textContent = '驗證中…';
+  $('#go').disabled = true;
+  try{
+    const r = await fetch('/api/admin/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+    // The panel reads these on boot; the password itself is never stored.
+    sessionStorage.setItem(KEY, d.token);
+    sessionStorage.setItem(KEY_U, d.username);
+    location.reload();
+  }catch(e){
+    $('#err').textContent = e.message;
+    $('#go').disabled = false;
+  }
+}
+
+$('#go').addEventListener('click', login);
+$('#pwd').addEventListener('keydown', (e) => { if(e.key === 'Enter') login(); });
+$('#usr').addEventListener('keydown', (e) => { if(e.key === 'Enter') $('#pwd').focus(); });
+$('#usr').focus();
+</script>
+
+</body>
+</html>

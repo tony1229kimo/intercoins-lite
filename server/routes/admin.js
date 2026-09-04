@@ -4,7 +4,10 @@
  */
 import { asyncRouter } from "../lib/router.js";
 import { query } from "../db.js";
-import { requireAdmin, tokenFor, adminUsers, adminEnabled } from "../middleware/adminAuth.js";
+import {
+  requireAdmin, tokenFor, adminUsers, adminEnabled,
+  setAdminCookie, clearAdminCookie,
+} from "../middleware/adminAuth.js";
 import { pushRewardCoupon, getFollowerInsight } from "../lib/line.js";
 import { TIER_LABEL } from "../prizes.js";
 import { PUBLISHED_TASKS, MAX_EARNABLE } from "../lib/tasks.js";
@@ -28,7 +31,15 @@ router.post("/login", async (req, res) => {
   if (!hit) return res.status(401).json({ error: "帳號或密碼錯誤" });
 
   await logAccess(username, "login", req).catch(() => {});
+  // 這個 cookie 只用來放行 /admin 的 HTML，資料一律還是要帶 Bearer。
+  setAdminCookie(req, res, token);
   res.json({ ok: true, username, token });
+});
+
+/** 登出：把頁面門禁 cookie 收回，下次進 /admin 會回到登入頁。 */
+router.post("/logout", (_req, res) => {
+  clearAdminCookie(res);
+  res.json({ ok: true });
 });
 
 router.use(requireAdmin);

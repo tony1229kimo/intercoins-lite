@@ -6,6 +6,7 @@
  * Flex 訊息裡的 /api/claim/:token 很容易指錯 host 而 404。同網域就沒這問題。
  */
 import express from "express";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -13,7 +14,8 @@ import { ensureSchema, hasDb, query } from "./db.js";
 import { seedPrizes } from "./prizes.js";
 import { verifyPushToken } from "./lib/line.js";
 import { TASKS, PUBLISHED_TASKS, MAX_EARNABLE } from "./lib/tasks.js";
-import { adminUsers } from "./middleware/adminAuth.js";
+import { adminUsers, adminPageAllowed } from "./middleware/adminAuth.js";
+import { stripComments } from "./lib/htmlComments.js";
 import gameRoutes from "./routes/game.js";
 import claimRoutes from "./routes/claim.js";
 import adminRoutes from "./routes/admin.js";
@@ -117,25 +119,57 @@ app.use("/api", gameRoutes);
 // （否則前端 fetch 會拿到一坨 HTML 然後 JSON.parse 爆掉，很難查）。
 app.use("/api", (_req, res) => res.status(404).json({ error: "not_found" }));
 
+/**
+ * public/*.html 一律【去掉註解】再送出。
+ *
+ * 那些檔案是原封不動送到瀏覽器的，按 F12 就能整份讀完 —— 客人真的讀了，
+ * 而且把裡面的內部註記當成可疑。原始碼保留完整說明，瀏覽器一個字都拿不到。
+ */
+const PAGES = new Map();
+
+function page(name) {
+  if (!PAGES.has(name)) {
+    PAGES.set(name, stripComments(readFileSync(join(PUBLIC_DIR, name), "utf8")));
+  }
+  return PAGES.get(name);
+}
+
+function sendPage(res, name) {
+  res.type("html").set("Cache-Control", "no-store").send(page(name));
+}
+
+// 直接指名 .html 的請求不交給 express.static —— 否則會繞過上面的去註解。
+app.get(/\.html$/i, (req, res, next) => {
+  const name = req.path.slice(req.path.lastIndexOf("/") + 1);
+  if (name === "index.html") return sendPage(res, "index.html");
+  if (name === "admin.html" || name === "admin-login.html") return res.redirect(302, "/admin");
+  next();
+});
+
+/**
+ * 後台頁面。【要先登入才拿得到 HTML】。
+ *
+ * 從前這頁誰都下載得到：登入表單擋得住資料，擋不住原始碼 —— 後台的版面、
+ * 欄位名與所有端點都一覽無遺。現在未登入只會拿到一頁登入表單。
+ * 資料本身仍然一律要帶 Bearer 打 /api/admin/*，這道門禁是額外加的一層。
+ */
+app.get("/admin", (req, res) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow");
+  sendPage(res, adminPageAllowed(req) ? "admin.html" : "admin-login.html");
+});
+
 app.use(express.static(PUBLIC_DIR, {
+  index: false,
   maxAge: "1h",
   setHeaders(res, path) {
-    // 遊戲本體不快取，改版要立刻生效；圖檔可以放心長快取。
-    if (path.endsWith("index.html")) res.setHeader("Cache-Control", "no-store");
-    else if (/\.(png|jpe?g|webp|mp4|woff2?)$/.test(path)) {
+    // 圖檔可以放心長快取。
+    if (/\.(png|jpe?g|webp|mp4|woff2?)$/.test(path)) {
       res.setHeader("Cache-Control", "public, max-age=604800, immutable");
     }
   },
 }));
-// 後台頁面。頁面本身沒有任何資料 —— 所有內容都要帶 ADMIN_TOKEN 打 /api/admin/*
-// 才拿得到，所以靜態檔公開沒關係。
-app.get("/admin", (_req, res) => {
-  res.setHeader("X-Robots-Tag", "noindex, nofollow");
-  res.setHeader("Cache-Control", "no-store");
-  res.sendFile(join(PUBLIC_DIR, "admin.html"));
-});
 
-app.get("*", (_req, res) => res.sendFile(join(PUBLIC_DIR, "index.html")));
+app.get("*", (_req, res) => sendPage(res, "index.html"));
 
 // 統一錯誤處理。POSTMORTEM Bug #3 的教訓：不要把所有錯誤吞成同一個誤導訊息，
 // 一定要把真實原因帶出來，否則現場只會看到「無效」然後所有人猜錯方向。

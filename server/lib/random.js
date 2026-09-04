@@ -39,7 +39,7 @@ export function weightedPick(items, { outOf = null } = {}) {
   }
   // 落在權重缺口 → 這次沒中獎（只有 outOf 模式才可能走到這裡）。
   // ⚠️ 不可以 fallthrough 回傳最後一項 —— 那會讓最後那個獎品把整個缺口吃掉。
-  //    2026-09-02 第一版就是這樣寫，測試跑出「玫果沁釀 84%」才發現。
+  //    2026-09-02 第一版就是這樣寫，靠分布測試才抓出來。
   return outOf ? null : items[items.length - 1];
 }
 
