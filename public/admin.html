@@ -108,7 +108,7 @@ tr:last-child td{border-bottom:none}
     <button role="tab" data-tab="contacts" aria-selected="true">待聯繫名單</button>
     <button role="tab" data-tab="winners">中獎名單</button>
     <button role="tab" data-tab="prizes">獎項與庫存</button>
-    <button role="tab" data-tab="growth">LINE 成長</button>
+    <button role="tab" data-tab="growth">活動成效</button>
   </nav>
 
   <div id="pane"></div>
@@ -196,15 +196,20 @@ function renderStats(){
     + (s.push.claimed || 0) + ' 張券已領取';
 }
 
-/* ── LINE 成長 ──
-   兩組數字刻意分開呈現，因為它們量的不是同一件事：
-     LINE 好友數 = 官方帳號實際有多少人（LINE 給的，隔日才有）
-     新玩家     = 第一次打開遊戲的人（我們自己的 DB，即時）
-   加了好友但沒玩的人只會出現在前者，兩者本來就不會一樣。 */
+/* ── 活動成效 ──
+   給 Tony 拿去對上報告用的。五個區塊：漏斗 / 社群任務 / LINE 好友 / 每日趨勢 / 獎品券。
+
+   有三個數字很容易被誤讀，UI 上都寫了但這裡再記一次：
+     1. LINE 好友數 ≠ 新玩家 —— 前者含「加了好友但沒玩」的人，且隔日才有資料
+     2. 社群任務完成數 ≠ 實際追蹤數 —— IG/FB 沒有驗證 API，是信任制，只能算意願
+     3. 券的領取率目前失真 —— 推播 bug 修好前所有券都沒送出去 */
 function renderGrowth(){
   const g = CACHE.growth || {};
   const np = g.newPlayers || {};
   const L = g.line || {};
+  const f = g.funnel || {};
+  const s = CACHE.stats || {};
+  const pct = (a, b) => b ? Math.round(a / b * 100) + '%' : '—';
 
   const lineBlock = L.ok
     ? `<div class="cards">
@@ -220,25 +225,66 @@ function renderGrowth(){
          下面的「新玩家」是我們自己資料庫算的，不受影響。</div>`;
 
   const rows = (g.daily || []).map(d =>
-    `<tr><td class="mono">${esc(d.date)}</td><td class="mono">${d.players}</td></tr>`).join('');
+    `<tr><td class="mono">${esc(d.date)}</td><td class="mono">${d.players}</td>
+         <td class="mono">${d.draws ?? 0}</td></tr>`).join('');
+
+  // 社群任務完成數 —— 活動的主要目的就是幫兩館的 IG/FB 導粉
+  const taskRows = (g.tasks || []).map(t =>
+    `<tr><td>${esc(t.title)}</td><td class="mono">${t.done}</td>
+         <td class="mono">${t.rate}%</td></tr>`).join('');
+
+  const pushOk = (s.push && s.push.ok) || 0;
+  const pushFail = (s.push && s.push.failed) || 0;
+  const claimed = (s.push && s.push.claimed) || 0;
 
   $('#pane').innerHTML = `
-    <h3 style="margin:18px 0 10px;font-size:15px">LINE 官方帳號好友</h3>
+    <h3 style="margin:18px 0 10px;font-size:15px">一、轉換漏斗</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>階段</th><th>人數</th><th>相對上一階段</th></tr></thead>
+      <tbody>
+        <tr><td>加好友並進入遊戲</td><td class="mono">${f.players ?? 0}</td><td class="mono">—</td></tr>
+        <tr><td>完成過至少一個任務</td><td class="mono">${f.did_task ?? 0}</td><td class="mono">${pct(f.did_task, f.players)}</td></tr>
+        <tr><td>抽過獎</td><td class="mono">${f.did_draw ?? 0}</td><td class="mono">${pct(f.did_draw, f.did_task)}</td></tr>
+        <tr><td>中過實體獎</td><td class="mono">${f.did_win ?? 0}</td><td class="mono">${pct(f.did_win, f.did_draw)}</td></tr>
+        <tr><td><b>留下個人資料（可再行銷）</b></td><td class="mono"><b>${f.gave_profile ?? 0}</b></td><td class="mono">${pct(f.gave_profile, f.players)}</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 style="margin:26px 0 10px;font-size:15px">二、社群任務完成數</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>任務</th><th>完成人數</th><th>完成率</th></tr></thead>
+      <tbody>${taskRows || '<tr><td colspan="3"><div class="empty">還沒有資料</div></td></tr>'}</tbody>
+    </table></div>
+    <div class="hint">完成率的分母是<b>「有做過任一任務的人」（${f.did_task ?? 0} 人）</b>，
+      不是全部玩家 —— 進來看一眼就走的人不該拉低社群任務的成績。
+      每人最多可賺 ${g.maxEarnable ?? 8} 枚洲遊幣。
+      ⚠️ 追蹤社群<b>無法真的驗證</b>（IG/FB 沒有這種 API），是「點了前往就發幣」的信任制，
+      所以這裡是<b>意願人數</b>，不等於實際追蹤數。真實增粉請對照各平台後台。</div>
+
+    <h3 style="margin:26px 0 10px;font-size:15px">三、LINE 官方帳號好友</h3>
     ${lineBlock}
-    <h3 style="margin:26px 0 10px;font-size:15px">遊戲新玩家（第一次打開遊戲的人）</h3>
+
+    <h3 style="margin:26px 0 10px;font-size:15px">四、每日趨勢</h3>
     <div class="cards">
-      <div class="stat"><div class="k">今天</div><div class="v">${np.today ?? 0}</div></div>
+      <div class="stat"><div class="k">今天新玩家</div><div class="v">${np.today ?? 0}</div></div>
       <div class="stat"><div class="k">昨天</div><div class="v">${np.yesterday ?? 0}</div></div>
       <div class="stat"><div class="k">近 7 天</div><div class="v">${np.last7 ?? 0}</div></div>
       <div class="stat"><div class="k">活動累計</div><div class="v">${np.total ?? 0}</div></div>
     </div>
     <div class="tablewrap" style="margin-top:14px"><table>
-      <thead><tr><th>日期（台北時間）</th><th>新玩家</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="2"><div class="empty">還沒有資料</div></td></tr>'}</tbody>
+      <thead><tr><th>日期（台北時間）</th><th>新玩家</th><th>抽獎次數</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="3"><div class="empty">還沒有資料</div></td></tr>'}</tbody>
     </table></div>
-    <div class="hint">「新玩家」＝第一次用 LINE 登入進遊戲的人。
-      <b>必須先加好友才能進遊戲</b>，所以這個數字是活動實際帶進來的人；
-      但加了好友卻沒玩遊戲的人不會算在這裡，會反映在上面的 LINE 好友數。</div>`;
+
+    <h3 style="margin:26px 0 10px;font-size:15px">五、獎品與券</h3>
+    <div class="cards">
+      <div class="stat"><div class="k">推播成功</div><div class="v">${pushOk}</div></div>
+      <div class="stat${pushFail ? ' warn' : ''}"><div class="k">推播失敗</div><div class="v">${pushFail}</div></div>
+      <div class="stat"><div class="k">券已領取</div><div class="v">${claimed}</div></div>
+    </div>
+    <div class="hint">⚠️ <b>券的領取率目前不能當成效看</b> ——
+      2026-09-02 修好推播 bug 之前，所有中獎推播都被 LINE 退件（成功 0 筆），
+      客人根本沒收到券。那批失敗的紀錄仍計在「推播失敗」裡，是舊帳不是新問題。</div>`;
 }
 
 /* ── 分頁 ── */

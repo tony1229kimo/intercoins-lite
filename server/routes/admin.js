@@ -7,6 +7,7 @@ import { query } from "../db.js";
 import { requireAdmin, tokenFor, adminUsers, adminEnabled } from "../middleware/adminAuth.js";
 import { pushRewardCoupon, getFollowerInsight } from "../lib/line.js";
 import { TIER_LABEL } from "../prizes.js";
+import { PUBLISHED_TASKS, MAX_EARNABLE } from "../lib/tasks.js";
 
 const router = asyncRouter();
 
@@ -127,13 +128,51 @@ router.get("/growth", async (_req, res) => {
     getFollowerInsight(OA_HOTEL).catch((e) => ({ ok: false, reason: String(e) })),
   ]);
 
+  // ── 社群任務完成數 —— 這是活動真正的目的（幫兩館的 IG/FB 導粉） ──
+  const [{ rows: taskRows }, { rows: drawDaily }, { rows: [funnel] }] = await Promise.all([
+    query("SELECT task_id, count(*)::int AS done FROM task_claims GROUP BY 1"),
+    query(
+      `SELECT (created_at AT TIME ZONE 'Asia/Taipei')::date AS day,
+              count(*)::int AS draws
+         FROM draws
+        WHERE created_at > now() - interval '30 days'
+        GROUP BY 1`,
+    ),
+    query(
+      `SELECT (SELECT count(*) FROM players)::int AS players,
+              (SELECT count(DISTINCT line_user_id) FROM task_claims)::int AS did_task,
+              (SELECT count(DISTINCT line_user_id) FROM draws)::int AS did_draw,
+              (SELECT count(DISTINCT line_user_id) FROM draws WHERE coin_reward = 0)::int AS did_win,
+              (SELECT count(*) FROM player_profiles)::int AS gave_profile`,
+    ),
+  ]);
+
+  const doneBy = Object.fromEntries(taskRows.map((r) => [r.task_id, r.done]));
+  const drawsBy = Object.fromEntries(drawDaily.map((r) => [
+    r.day instanceof Date ? r.day.toISOString().slice(0, 10) : String(r.day).slice(0, 10),
+    r.draws,
+  ]));
+  const dayKey = (d) => (d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10));
+
   res.json({
     newPlayers: totals,
     daily: daily.map((d) => ({
-      date: d.day instanceof Date ? d.day.toISOString().slice(0, 10) : String(d.day).slice(0, 10),
+      date: dayKey(d.day),
       players: d.players,
+      draws: drawsBy[dayKey(d.day)] ?? 0,
     })),
     line,
+    funnel,
+    maxEarnable: MAX_EARNABLE,
+    tasks: PUBLISHED_TASKS.map((t) => ({
+      id: t.id,
+      title: t.title,
+      kind: t.kind,
+      done: doneBy[t.id] ?? 0,
+      // 分母用「有做過任一任務的人」，不是全部玩家 ——
+      // 進來看一眼就走的人不該拉低社群任務的完成率
+      rate: funnel.did_task ? +((doneBy[t.id] ?? 0) / funnel.did_task * 100).toFixed(1) : 0,
+    })),
   });
 });
 
