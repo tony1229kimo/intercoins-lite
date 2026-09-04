@@ -1,11 +1,12 @@
 /**
- * LIFF id_token 驗證。
+ * LIFF id token verification.
  *
- * 移植自 ickaohsiungculinaryjourneymap/server/middleware/liffAuth.ts。
- * 沒有這層的話，任何人用 curl 帶個 userId 就能讀寫別人的洲遊幣與中獎紀錄。
+ * Without this layer, anyone could pass a userId with curl and read or write
+ * somebody else's coins and win history.
  *
- * 需要的環境變數：LINE_CHANNEL_ID（= LIFF_ID 的數字前綴，高雄洲際 = 1656533531）
- * 本機開發沒設時放行並印警告，方便純前端除錯；production 沒設則直接 503。
+ * Needs LINE_CHANNEL_ID, the numeric prefix of the LIFF id.
+ * In local development, an unset value lets requests through with a warning so
+ * the front end can be worked on; in production an unset value answers 503.
  */
 const VERIFY_ENDPOINT = "https://api.line.me/oauth2/v2.1/verify";
 const isProduction = process.env.NODE_ENV === "production";

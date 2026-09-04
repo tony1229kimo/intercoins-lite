@@ -1,14 +1,17 @@
 /**
- * 獎項匯入。
+ * Prize import.
  *
- * 真相來源是行銷提供的「獎項一覽表.xlsx」，用 scripts/import-prizes.py 轉成
- * server/prizes.kh.json，這裡再寫進 DB。
+ * The source of truth is the prize table supplied by marketing, converted by
+ * scripts/import-prizes.py into server/prizes.kh.json and written to the database
+ * from here.
  *
- * 機率規則（Tony 2026-09-01 拍板）：Excel 沒有機率欄，權重 = 名額。
- * 也就是同一等級內，名額越多越容易抽中，庫存會均勻消耗完。
- * 之後行銷若給了明確機率，改 JSON 的 weight 重跑即可，程式不用動。
+ * Weighting rule: the source table carries no odds column, so weight follows the
+ * quota. Within a tier, the more units a prize has the more often it comes up,
+ * and stock drains evenly. If marketing later supplies explicit weights, edit the
+ * JSON and re-run; no code change is needed.
  *
- * ⚠️ issued（已發出數）刻意【不】被匯入覆蓋 —— 重跑匯入不會把已發出的獎品歸零。
+ * issued is deliberately never overwritten by an import, so re-running one cannot
+ * reset what has already gone out.
  */
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -17,7 +20,7 @@ import { query } from "./db.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-/** 兩館的獎項共用同一個轉盤；差別在領獎方式（見 prizes.json 的 claim_mode）。 */
+/** Both hotels share one wheel; they differ in how a prize is claimed (see claim_mode in prizes.json). */
 export const HOTEL_LABEL = { KH: "高雄洲際酒店", TPE: "臺北洲際酒店" };
 
 export const TIER_LABEL = { 5: "一等獎", 3: "二等獎", 1: "三等獎" };
@@ -30,19 +33,22 @@ export async function loadPrizeSeed() {
 }
 
 /**
- * 把 prizes.json 匯入資料庫。**每次容器啟動都會跑**（server/index.js）。
+ * Import prizes.json into the database. This runs on every container start.
  *
- * ⚠️ 2026-09-02 事故：原本 ON CONFLICT 會把 quota 與 weight 一起蓋回 seed 檔的值，
- *    結果後台改的名額與機率【每次部署都被還原】—— 而且完全沒有任何提示。
- *    當天在後台調好的設定，20 分鐘後一次部署就全部消失。
+ * 2026-09-02 incident: ON CONFLICT used to write quota and weight back to the
+ * seed values, so anything changed in the admin panel was silently reverted by
+ * every deploy, with no warning at all. Settings adjusted that day were gone
+ * twenty minutes later, taken out by one deploy.
  *
- * 所以現在分成兩類欄位：
- *   目錄欄位（名稱／連結／等級／領獎方式…）→ 每次都以 prizes.json 為準
- *   營運欄位（quota / weight / visible / active）→ **只在第一次 INSERT 時設定**，
- *                                                  之後一律由後台 PATCH 管理
+ * So the columns are now in two groups:
+ *   catalogue (name, link, tier, claim mode, ...)  follows prizes.json every time
+ *   operational (quota, weight, visible, active)   set on the first INSERT only,
+ *                                                  and managed by the admin panel
+ *                                                  from then on
  *
- * 真的要用 seed 檔覆蓋營運值時（例如行銷重新給了一版獎項表），
- * 設環境變數 PRIZES_RESEED_OPS=1 再重新部署，跑完記得拿掉。
+ * To genuinely overwrite the operational values from the seed file -- a new prize
+ * table from marketing, say -- set PRIZES_RESEED_OPS=1, redeploy, and remember to
+ * take it off again afterwards.
  */
 export async function seedPrizes() {
   const seed = await loadPrizeSeed();
@@ -51,7 +57,7 @@ export async function seedPrizes() {
     return 0;
   }
 
-  // 營運欄位預設【不覆蓋】，避免部署把後台調好的名額與機率洗掉。
+  // Operational columns are left alone by default, so a deploy cannot wipe what was set in the admin panel.
   const RESEED_OPS = process.env.PRIZES_RESEED_OPS === "1";
   if (RESEED_OPS) {
     console.warn("[prizes] ⚠️ PRIZES_RESEED_OPS=1 —— 這次會用 seed 檔覆蓋 quota 與 weight");
@@ -84,7 +90,7 @@ export async function seedPrizes() {
     );
   }
 
-  // seed 裡沒有的獎項 → 下架（例如行銷把某一格拿掉了），但保留歷史紀錄。
+  // A prize missing from the seed is deactivated rather than deleted, so its history survives.
   const ids = seed.map((p) => p.id);
   const { rowCount } = await query(
     `UPDATE prizes SET active = false, updated_at = now()

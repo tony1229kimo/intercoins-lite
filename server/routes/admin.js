@@ -1,6 +1,6 @@
 /**
- * 後台 API —— 給行銷/主管查庫存、調機率、匯出中獎名單、補推播。
- * 全部需要 Authorization: Bearer <ADMIN_TOKEN>（或 ?token=）。
+ * Admin API: stock, weights, winner exports and re-sending a push.
+ * Every route needs Authorization: Bearer <token> (or ?token=).
  */
 import { asyncRouter } from "../lib/router.js";
 import { query } from "../db.js";
@@ -14,10 +14,10 @@ import { PUBLISHED_TASKS, MAX_EARNABLE } from "../lib/tasks.js";
 
 const router = asyncRouter();
 
-// 好友洞察查的是【高雄洲際】的官方帳號 —— 客人是從那裡加好友進來的。
+// Follower insight reads the Kaohsiung official account -- that is where guests added us from.
 const OA_HOTEL = "KH";
 
-/** 帳密登入 → 換取 token。密碼只在這一次進出，之後都用推導出的 token。 */
+/** Credentials in, token out. The password passes through once; everything after uses the derived token. */
 router.post("/login", async (req, res) => {
   if (!adminEnabled()) {
     return res.status(503).json({ error: "後台停用：ADMIN_USERS 與 ADMIN_TOKEN 都沒設定" });
@@ -31,12 +31,12 @@ router.post("/login", async (req, res) => {
   if (!hit) return res.status(401).json({ error: "帳號或密碼錯誤" });
 
   await logAccess(username, "login", req).catch(() => {});
-  // 這個 cookie 只用來放行 /admin 的 HTML，資料一律還是要帶 Bearer。
+  // This cookie only releases the /admin HTML. Data still needs a bearer token.
   setAdminCookie(req, res, token);
   res.json({ ok: true, username, token });
 });
 
-/** 登出：把頁面門禁 cookie 收回，下次進 /admin 會回到登入頁。 */
+/** Sign out: take the page cookie back, so /admin returns to the sign-in page. */
 router.post("/logout", (_req, res) => {
   clearAdminCookie(res);
   res.json({ ok: true });
@@ -44,7 +44,7 @@ router.post("/logout", (_req, res) => {
 
 router.use(requireAdmin);
 
-/** 留下「誰查了含個資的名單」。寫入失敗不影響查詢本身。 */
+/** Record who looked at a list containing personal data. A failed write must not block the query itself. */
 async function logAccess(username, action, req) {
   await query(
     "INSERT INTO admin_access_log (username, action, ip) VALUES ($1, $2, $3)",
@@ -52,7 +52,7 @@ async function logAccess(username, action, req) {
   );
 }
 
-/** 獎項與庫存總表（含機率，僅後台可見）。 */
+/** Prizes and stock. Admin only. */
 router.get("/prizes", async (_req, res) => {
   const { rows } = await query(
     `SELECT id, hotel, tier, slot, position, name, claim_mode, quota, issued,
@@ -65,19 +65,20 @@ router.get("/prizes", async (_req, res) => {
     (byTier[r.tier] ??= []).push(r);
   }
   const summary = Object.entries(byTier).map(([tier, list]) => {
-    // 判斷條件要跟 /spin 的抽獎池完全一致，否則後台會謊報「這個等級沒開」。
-    // 安慰獎即使 visible = false 也抽得到（二等／一等不列進獎項一覽）。
+    // These conditions have to match the draw pool in /spin exactly, or the panel
+    // will wrongly report a tier as closed. A consolation prize is drawable even with
+    // visible = false.
     const live = list.filter((p) => p.active && (p.visible || p.is_consolation)
       && Number(p.weight) > 0 && (p.quota === 0 || p.issued < p.quota));
-    // 抽獎是對 100 抽的，所以 weight 本身就是真實機率，不要再正規化。
-    // 總和不足 100 的缺口 = 銘謝惠顧的機率。
+    // The draw is against a fixed denominator, so weight is already the real figure. Do not normalise it again.
+    // any shortfall against that denominator is the chance of not winning
     const total = live.reduce((s, p) => s + Number(p.weight), 0);
     return {
       tier: Number(tier),
       label: TIER_LABEL[tier],
       open: live.length > 0,
       totalPct: +total.toFixed(2),
-      missPct: +Math.max(0, 100 - total).toFixed(2),   // 銘謝惠顧機率
+      missPct: +Math.max(0, 100 - total).toFixed(2),   // chance of not winning
       prizes: list.map((p) => ({
         ...p,
         weight: Number(p.weight),
@@ -89,7 +90,7 @@ router.get("/prizes", async (_req, res) => {
   res.json({ tiers: summary });
 });
 
-/** 調整單一獎項的機率權重 / 名額 / 顯示。行銷改完立即生效，不用重新部署。 */
+/** Adjust one prize: weight, quota, visibility. Takes effect immediately, with no redeploy. */
 router.patch("/prizes/:id", async (req, res) => {
   const fields = [];
   const values = [req.params.id];
@@ -110,12 +111,15 @@ router.patch("/prizes/:id", async (req, res) => {
 });
 
 /**
- * 成長數字：LINE 官方帳號好友數 ＋ 每日新玩家。
+ * Growth figures: official-account followers, and new players per day.
  *
- * 兩者是不同的東西，UI 要分開講：
- *   followers  = LINE 官方帳號的實際好友數（LINE 給的，隔日才有）
- *   newPlayers = 第一次打開遊戲的人（我們自己的 DB，即時且精確）
- * 加了好友但沒玩遊戲的人只會算進前者，所以兩個數字本來就不會一樣。
+ * These are different things and the UI has to keep them apart:
+ *   followers  actual friends of the LINE official account, reported by LINE,
+ *              available only from the next day
+ *   newPlayers people who opened the game for the first time, from our own
+ *              database, immediate and exact
+ * Someone who adds the account but never plays counts only towards the first, so
+ * the two numbers are not meant to agree.
  */
 router.get("/growth", async (_req, res) => {
   const [{ rows: daily }, { rows: [totals] }, line] = await Promise.all([
@@ -127,8 +131,7 @@ router.get("/growth", async (_req, res) => {
         GROUP BY 1 ORDER BY 1 DESC`,
     ),
     query(
-      // ⚠️ FILTER 後面的 ::int 一定要整個括起來再轉型，
-      //    不然 :: 會綁到 FILTER 的括號上，語意不是你想的那樣。
+      // The ::int after a FILTER clause has to wrap the whole expression, or the cast binds to the FILTER parentheses and means something other than intended.
       `SELECT count(*)::int AS total,
               (count(*) FILTER (
                 WHERE (created_at AT TIME ZONE 'Asia/Taipei')::date
@@ -142,7 +145,7 @@ router.get("/growth", async (_req, res) => {
     getFollowerInsight(OA_HOTEL).catch((e) => ({ ok: false, reason: String(e) })),
   ]);
 
-  // ── 社群任務完成數 —— 這是活動真正的目的（幫兩館的 IG/FB 導粉） ──
+  // -- channel task completions --
   const [{ rows: taskRows }, { rows: drawDaily }, { rows: [funnel] }] = await Promise.all([
     query("SELECT task_id, count(*)::int AS done FROM task_claims GROUP BY 1"),
     query(
@@ -183,14 +186,14 @@ router.get("/growth", async (_req, res) => {
       title: t.title,
       kind: t.kind,
       done: doneBy[t.id] ?? 0,
-      // 分母用「有做過任一任務的人」，不是全部玩家 ——
-      // 進來看一眼就走的人不該拉低社群任務的完成率
+      // The denominator is people who did at least one task, not every player: someone
+      // who looks in once and leaves should not drag the completion rate down.
       rate: funnel.did_task ? +((doneBy[t.id] ?? 0) / funnel.did_task * 100).toFixed(1) : 0,
     })),
   });
 });
 
-/** 營運總覽。 */
+/** Operations overview. */
 router.get("/stats", async (_req, res) => {
   const [{ rows: [players] }, { rows: [coins] }, { rows: draws }, { rows: [push] }] =
     await Promise.all([
@@ -214,11 +217,12 @@ router.get("/stats", async (_req, res) => {
 });
 
 /**
- * 中獎名單的共用查詢。
+ * Shared query behind the winners list.
  *
- * 兩館的人需要「互相核對誰中了誰家的獎」（Tony 2026-09-01）：
- * 高雄的櫃檯要知道客人手上那張券是不是自家發的、臺北的人要知道該聯繫誰，
- * 所以名單是【跨館一份】，用 hotel 欄位分辨，不拆成兩份。
+ * Both properties need to check each other's winners: the Kaohsiung front desk
+ * has to know whether a voucher in a guest's hand is one of theirs, and Taipei
+ * has to know who to contact. So this is one list across both, told apart by the
+ * hotel column, rather than two.
  */
 async function fetchWinners() {
   const { rows } = await query(
@@ -239,7 +243,7 @@ async function fetchWinners() {
   return rows;
 }
 
-/** 完整中獎名單（JSON）—— 後台頁面用，兩館共用一份、可依館別篩選。 */
+/** Full winners list as JSON, for the admin page. One list for both hotels, filterable by hotel. */
 router.get("/winners", async (req, res) => {
   await logAccess(req.adminUser, "winners", req).catch(() => {});
   const rows = await fetchWinners();
@@ -255,7 +259,7 @@ router.get("/winners", async (req, res) => {
       code: r.code,
       coin: r.coin_reward,
       claimMode: r.claim_mode,
-      // 聯絡資訊優先用中獎當下留的，沒有就退回會員填過的個人資料
+      // Prefer the contact details left at the time of winning; fall back to the ones in the member's profile.
       name: r.contact_name || r.profile_name || null,
       phone: r.contact_phone || r.profile_phone || null,
       email: r.contact_email || r.profile_email || null,
@@ -270,7 +274,7 @@ router.get("/winners", async (req, res) => {
   });
 });
 
-/** 中獎名單 CSV（UTF-8 BOM，Excel 直接開得起來）。 */
+/** Winners list as CSV, UTF-8 with a BOM so Excel opens it directly. */
 router.get("/winners.csv", async (req, res) => {
   await logAccess(req.adminUser, "winners.csv", req).catch(() => {});
   const rows = await fetchWinners();

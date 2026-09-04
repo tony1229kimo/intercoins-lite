@@ -15,12 +15,17 @@
 /** Characters that, immediately before a "/", mean division rather than a regex. */
 const DIVIDES = /[A-Za-z0-9_$)\]]/;
 
-/** Every comment in `src`, in source order, as {kind, start, end, text}. */
-export function commentSpans(src) {
+/**
+ * Every comment in `src`, in source order, as {kind, start, end, text}.
+ *
+ * Pass mode "js" for a plain .js file; the default walks an HTML document
+ * and switches into CSS or JS when it meets a <style> or <script>.
+ */
+export function commentSpans(src, { mode: startMode = "html" } = {}) {
   const spans = [];
   const lower = src.toLowerCase();
   let i = 0;
-  let mode = "html";
+  let mode = startMode;
   let prevSig = "";
 
   const push = (kind, start, end) => spans.push({ kind, start, end, text: src.slice(start, end) });

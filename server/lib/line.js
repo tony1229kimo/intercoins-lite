@@ -1,9 +1,8 @@
 /**
- * LINE Messaging API —— 加好友檢查 + 中獎券推播。
- * 移植自 ickaohsiungculinaryjourneymap/server/lib/linePush.ts。
+ * LINE Messaging API: friend check and voucher push.
  *
- * 用的是「高雄洲際 LINE 官方帳號」的 long-lived channel access token，
- * 跟味蕾旅遊地圖同一把（LINE_MESSAGING_ACCESS_TOKEN_KH）。
+ * Uses the long-lived channel access token of the Kaohsiung official account
+ * (LINE_MESSAGING_ACCESS_TOKEN_KH).
  */
 
 const BRAND_GOLD = "#B8975A";
@@ -14,13 +13,14 @@ function tokenFor(hotel) {
 }
 
 /**
- * 驗證 Messaging API token 是不是【真的有效】。
+ * Check whether a Messaging API token actually works.
  *
- * 踩雷 T09：`*_configured: true` 只代表環境變數非空，貼錯、貼到過期的、
- * 貼到別的 channel 的，看起來都一樣是 true。這支真的打一次 LINE 才知道。
+ * *_configured: true only means the variable is non-empty. A token that is
+ * mistyped, expired, or from a different channel all look exactly the same that
+ * way. Only calling LINE tells them apart.
  *
- * GET /v2/bot/info 不需要任何參數，回傳這把 token 對應的官方帳號基本資料 ——
- * 拿來當「這把鑰匙能不能開這道門」的檢查最乾淨。
+ * GET /v2/bot/info takes no parameters and returns the official account the token
+ * belongs to, which is the cleanest way to ask whether this key opens this door.
  */
 export async function verifyPushToken(hotel) {
   const token = tokenFor(hotel);
@@ -35,11 +35,11 @@ export async function verifyPushToken(hotel) {
       return { ok: false, reason: `HTTP ${resp.status} ${body.slice(0, 160)}` };
     }
     const info = await resp.json();
-    // 只回官方帳號的公開識別資訊，不回 token 本身。
+    // Return only the account's public identifiers, never the token.
     return {
       ok: true,
-      basicId: info.basicId,          // 例 @xxx
-      displayName: info.displayName,  // 例 高雄洲際酒店
+      basicId: info.basicId,          // e.g. @xxx
+      displayName: info.displayName,  // e.g. the property name
       chatMode: info.chatMode,
     };
   } catch (err) {
@@ -48,24 +48,25 @@ export async function verifyPushToken(hotel) {
 }
 
 /**
- * 加好友檢查。
- * GET /v2/bot/profile/:userId —— 200 = 已加好友、404 = 未加好友。
- * 這是唯一不用額外授權就能問「這個人是不是我的好友」的方法。
+ * Friend check.
+ * GET /v2/bot/profile/:userId -- 200 means they are a friend, 404 means they are not.
+ * This is the only way to ask whether someone is a friend without extra authorisation.
  */
 /**
- * 官方帳號的好友數（LINE Insight API）。
+ * Follower count for the official account (LINE Insight API).
  *
  * GET /v2/bot/insight/followers?date=yyyyMMdd
- *   followers        累計好友數（扣掉封鎖的）
- *   targetedReaches  可觸及人數（推播打得到的）
- *   blocks           封鎖數
+ *   followers        cumulative friends, blocks excluded
+ *   targetedReaches  how many a push can actually reach
+ *   blocks           blocked count
  *
- * ⚠️ 三個限制，UI 要據實說明，不要假裝拿得到：
- *   1. **資料隔日才有** —— 今天的數字最快明天才會出現，date 不能填今天
- *   2. 好友數太少時 LINE 會回 status:"unavailable"（不是錯誤，是它不給）
- *   3. 只能查最近 60 天
+ * Three limits, which the UI has to state rather than paper over:
+ *   1. the data appears a day late, so today's date returns nothing
+ *   2. with too few friends LINE answers status "unavailable" -- not an error,
+ *      it simply will not say
+ *   3. only the last 60 days can be queried
  *
- * 所以這裡從 daysBack 天前往回試，拿到第一筆 status:"ready" 就回傳。
+ * So this walks back from daysBack and returns the first response marked ready.
  */
 export async function getFollowerInsight(hotel, { daysBack = 1, maxTry = 5 } = {}) {
   const token = tokenFor(hotel);
@@ -77,7 +78,7 @@ export async function getFollowerInsight(hotel, { daysBack = 1, maxTry = 5 } = {
 
   let lastReason = "沒有可用的資料";
   for (let i = 0; i < maxTry; i++) {
-    // 用台北時間的日界線推算，避免 UTC 換日造成差一天
+    // Work the day boundary out in Taipei time, so a UTC rollover cannot be a day out.
     const d = new Date(Date.now() + 8 * 3600_000 - (daysBack + i) * 86400_000);
     const date = ymd(d);
     try {
@@ -124,16 +125,21 @@ export async function checkFriendship(hotel, userId) {
 }
 
 /**
- * 推播「請留聯絡資訊」提醒（claim_mode = 'contact' 的獎項）。
+ * Push the "please leave your contact details" reminder, for prizes with
+ * claim_mode 'contact'.
  *
- * 哪些獎走這條路：
- *   臺北全部 —— 兌換細則還沒定案，而且臺北是另一個 OA，我們推不了券
- *   高雄的兩項住宿大獎 —— 住宿券要安排入住日期，由飯店的人主動聯繫比較妥當
+ * Which prizes take this path:
+ *   every Taipei prize -- the redemption terms are not settled, and Taipei is a
+ *   separate official account we cannot push vouchers through
+ *   the two Kaohsiung room prizes -- a stay has to be scheduled, so it is better
+ *   for the hotel to make contact
  *
- * 客人有可能抽完就關掉彈窗跑了，所以推一則提醒進聊天室，按鈕帶他回遊戲補填。
+ * A guest may close the dialog and leave straight after the draw, so a reminder
+ * goes into the chat with a button that brings them back to fill the form in.
  *
- * ⚠️ hotel 是「用哪個 OA 推播」（永遠是 KH，客人從那裡進來的），
- *    prizeHotel 是「這個獎是哪一家的」（訊息內文要講對）—— 兩者不一定相同。
+ * hotel is which account does the pushing (always KH, where the guest came from);
+ * prizeHotel is whose prize it is, which the message text has to get right. They
+ * are not always the same.
  */
 const HOTEL_ZH = { KH: "高雄洲際酒店", TPE: "臺北洲際酒店" };
 
@@ -141,7 +147,7 @@ export async function pushContactReminder(hotel, userId, { prizeName, code, tier
   const token = tokenFor(hotel);
   if (!token) return { ok: false, reason: `LINE_MESSAGING_ACCESS_TOKEN_${hotel} 未設定` };
 
-  // LIFF 連結才能在 LINE 內開回遊戲並保有登入狀態；沒設 LIFF_ID 時退回一般網址。
+  // A LIFF link is what reopens the game inside LINE with the session intact; without a LIFF id, fall back to the plain URL.
   const liffId = process.env.LIFF_ID;
   const backUrl = liffId
     ? `https://liff.line.me/${liffId}`
@@ -153,8 +159,9 @@ export async function pushContactReminder(hotel, userId, { prizeName, code, tier
     header: {
       type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: BRAND_INK,
       contents: [
-        // ⚠️ 不要加 letterSpacing —— LINE Flex 的 text 沒有這個屬性，整則訊息會被退 400。
-        //    2026-09-02 就是它害 76 筆中獎推播【全部】失敗，客人一張券都沒收到。
+        // Do not add letterSpacing -- LINE Flex text has no such property and the whole
+        // message is rejected with a 400. On 2026-09-02 that one property failed all 76
+        // winner pushes, and not a single guest received a voucher.
         { type: "text", text: "洲 遊 幣 · 恭 喜 中 獎", color: "#F4D489", size: "sm", weight: "bold" },
         { type: "text", text: tierLabel, color: "#FFFFFF", size: "xxl", weight: "bold", margin: "sm" },
       ],
@@ -167,7 +174,7 @@ export async function pushContactReminder(hotel, userId, { prizeName, code, tier
         { type: "text", text: code ? `兌換碼 ${code}` : "", size: "sm", color: "#686869", margin: "md" },
         {
           type: "text", size: "sm", color: BRAND_INK, wrap: true, margin: "md",
-          // 獎項所屬飯店 ≠ 推播用的 OA —— 高雄的住宿大獎也走這條路，不能寫死臺北。
+          // The property giving the prize is not the account doing the pushing: the Kaohsiung room prizes take this path too, so it cannot be hardcoded.
           text: `本獎項由${HOTEL_ZH[prizeHotel] || "本酒店"}提供，兌換方式將由專人與您聯繫。\n`
               + "請點下方按鈕留下聯絡資訊，我們會盡快與您聯絡。",
         },
@@ -202,10 +209,11 @@ export async function pushContactReminder(hotel, userId, { prizeName, code, tier
 }
 
 /**
- * 推播中獎券（Flex Message）。
+ * Push a winning voucher as a Flex Message.
  *
- * 按鈕連到我們自己的 /api/claim/:token（單次有效），由它再 302 導去 Omnichat。
- * 這樣客人截圖轉傳也沒用 —— 券只能被領一次。
+ * The button points at our own /api/claim/:token, which is single use and then
+ * redirects onward. A screenshot passed to someone else is therefore worthless --
+ * a voucher can be collected once.
  */
 export async function pushRewardCoupon(hotel, userId, draw) {
   const token = tokenFor(hotel);
@@ -225,8 +233,9 @@ export async function pushRewardCoupon(hotel, userId, draw) {
     header: {
       type: "box", layout: "vertical", paddingAll: "16px", backgroundColor: BRAND_INK,
       contents: [
-        // ⚠️ 不要加 letterSpacing —— LINE Flex 的 text 沒有這個屬性，整則訊息會被退 400。
-        //    2026-09-02 就是它害 76 筆中獎推播【全部】失敗，客人一張券都沒收到。
+        // Do not add letterSpacing -- LINE Flex text has no such property and the whole
+        // message is rejected with a 400. On 2026-09-02 that one property failed all 76
+        // winner pushes, and not a single guest received a voucher.
         { type: "text", text: "洲 遊 幣 · 恭 喜 中 獎", color: "#F4D489", size: "sm", weight: "bold" },
         { type: "text", text: draw.tier_label, color: "#FFFFFF", size: "xxl", weight: "bold", margin: "sm" },
       ],

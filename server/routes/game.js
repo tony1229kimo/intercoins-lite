@@ -1,5 +1,5 @@
 /**
- * 消費者端 API。所有端點都要通過 LIFF id_token 驗證。
+ * Consumer API. Every route requires a verified LIFF id token.
  */
 import { asyncRouter } from "../lib/router.js";
 import { query, withTx } from "../db.js";
@@ -12,29 +12,33 @@ import { TIER_LABEL, TIER_COST, TIERS } from "../prizes.js";
 const router = asyncRouter();
 const liffAuth = requireLiffAuth();
 
-// 加好友檢查與所有推播都走【高雄洲際的 LINE 官方帳號】—— 客人是從高雄的 LIFF 進來的。
-// 轉盤上雖然同時有臺北的獎項，但臺北是另一個 OA，我們沒有它的 token，
-// 所以臺北的獎不推券、改收聯絡資訊（prizes.claim_mode = 'contact'）。
+// The friend check and every push go through the Kaohsiung official account,
+// because that is the LIFF the guest arrived through. Taipei prizes share the
+// wheel, but Taipei is a separate account we hold no token for, so Taipei prizes
+// issue no voucher and collect contact details instead (claim_mode 'contact').
 const OA_HOTEL = "KH";
 
 /**
- * 每個 LINE 帳號最多能中幾件【實體獎】（洲遊幣不算）。**預設 0 = 不限。**
+ * How many physical prizes one LINE account may win. 0, the default, is no limit.
  *
- * 這個上限是 2026-09-02 為了止血才加的：當時洲遊幣是全額退幣，
- * 客人手上的每一枚幣都會循環換成實體獎，4 個人就能把三等獎清空。
+ * The limit was added on 2026-09-02 to stop the bleeding: coins were refunded in
+ * full at the time, so every coin cycled back into another physical prize and a
+ * handful of people could empty a tier.
  *
- * 同日稍後調整了轉盤設定，退幣循環就沒了 ——
- * 每抽必扣、每人上限 8 枚幣，消耗量自然封頂，上限失去必要性。
- * Tony 2026-09-02 決定關掉。
+ * The wheel was reconfigured later the same day and the refund loop went with it.
+ * Every draw now costs coins and each person can earn only a fixed number, so
+ * consumption is capped on its own and the limit stopped being necessary. Turned
+ * off on 2026-09-02.
  *
- * 功能保留：要重新開啟就在 Zeabur 設 MAX_PHYSICAL_WINS=2（或其他數字），
- * 記得按「儲存並重新部署」—— 容器只在啟動時讀 process.env。
- * 解析失敗一律 fail-open 當作不限：這個開關壞掉的方向必須是「不擋」，
- * 不能是「把客人全鎖在門外」。
+ * The mechanism stays: set MAX_PHYSICAL_WINS to a number to switch it back on,
+ * and remember that the container reads process.env only at startup, so it needs
+ * a real redeploy. A value that will not parse falls open to "no limit" on
+ * purpose -- if this switch breaks, it has to break towards letting guests play,
+ * not towards locking all of them out.
  */
 const MAX_PHYSICAL_WINS = Number.parseInt(process.env.MAX_PHYSICAL_WINS ?? "0", 10) || 0;
 
-/** 這個人已經中了幾件實體獎（coin_reward = 0 的抽獎紀錄；含待聯繫類）。 */
+/** How many physical prizes this person has already won (draws with no coin reward, including those awaiting contact). */
 async function countPhysicalWins(client, userId) {
   const { rows: [r] } = await client.query(
     "SELECT COUNT(*)::int AS n FROM draws WHERE line_user_id = $1 AND coin_reward = 0",
@@ -43,7 +47,7 @@ async function countPhysicalWins(client, userId) {
   return r.n;
 }
 
-/** 首次進來自動建檔；每次都更新 LINE 顯示名稱/頭像。 */
+/** Create the player on first arrival; refresh the LINE display name and avatar every time. */
 async function upsertPlayer(req) {
   const { rows } = await query(
     `INSERT INTO players (line_user_id, display_name, picture_url, hotel)
@@ -73,20 +77,21 @@ async function addCoins(client, userId, delta, reason, ref) {
   return balance;
 }
 
-// ── 加好友 gate ────────────────────────────────────────────────
-// 客人沒加高雄洲際 LINE 好友之前不能進遊戲 —— 中獎券是用 push 發的，
-// 不是好友就 silent fail，等於中了獎卻拿不到東西。
+// -- friend gate --------------------------------------------------
+// A guest has to add the official account before playing, because vouchers are
+// delivered by push: to a non-friend that fails silently, which would mean
+// winning a prize and never receiving it.
 router.get("/me/friendship", liffAuth, async (req, res) => {
   const result = await checkFriendship(OA_HOTEL, req.lineUserId);
   if (!result.ok) {
-    // 我們自己的基礎設施壞掉不該把真實客人擋在外面 —— 降級放行並留 log。
+    // Our own infrastructure failing must not shut a real guest out -- let them through and log it.
     console.warn("[friendship] 檢查失敗，降級為已加好友:", result.reason);
     return res.json({ ok: true, isFriend: true, degraded: true });
   }
   res.json({ ok: true, isFriend: result.isFriend });
 });
 
-// ── 遊戲狀態 ───────────────────────────────────────────────────
+// -- game state ---------------------------------------------------
 router.get("/state", liffAuth, async (req, res) => {
   const player = await upsertPlayer(req);
 
@@ -106,7 +111,7 @@ router.get("/state", liffAuth, async (req, res) => {
            FROM draws WHERE line_user_id = $1 ORDER BY created_at DESC LIMIT 20`,
         [req.lineUserId],
       ),
-      // 中了臺北的獎但還沒留聯絡資訊 —— 客人關掉彈窗就跑掉的話，下次進來要再提醒。
+      // Won a prize that needs contact details but has not left any. If the guest closed the dialog and left, ask again next time.
       query(
         `SELECT d.id, d.prize_name, d.tier, d.code, d.hotel
            FROM draws d
@@ -120,7 +125,7 @@ router.get("/state", liffAuth, async (req, res) => {
         "SELECT name, phone, email FROM player_profiles WHERE line_user_id = $1",
         [req.lineUserId],
       ),
-      // 已中的實體獎件數 —— 前端要用來在達上限時就先擋住按鈕，不要讓客人白轉一圈。
+      // Physical prizes won so far, so the front end can disable the button on reaching any limit instead of spinning first.
       query(
         "SELECT COUNT(*)::int AS n FROM draws WHERE line_user_id = $1 AND coin_reward = 0",
         [req.lineUserId],
@@ -129,9 +134,8 @@ router.get("/state", liffAuth, async (req, res) => {
 
   const done = Object.fromEntries(claimed.map((r) => [r.task_id, true]));
 
-  // 轉盤盤面：每個等級的獎品按 position 排好（兩館的獎項在同一個盤面上）。
-  // ⚠️ 只吐 id / 名稱 / 館別 / 領獎方式，不吐 weight / quota / issued ——
-  //    機率與庫存不對客人公開（Tony 2026-09-01：客人不該從 F12 看到中獎率或剩幾張）。
+  // The wheel: each tier's prizes in position order, both hotels on one wheel.
+  // Only id, name, hotel and claim mode go out -- never weight, quota or issued.
   const wheel = {};
   const tierOpen = {};
   for (const tier of TIERS) {
@@ -163,21 +167,21 @@ router.get("/state", liffAuth, async (req, res) => {
       prize: w.prize_name, tier: w.tier, code: w.code,
       coin: w.coin_reward, at: w.created_at,
     })),
-    // 還沒補聯絡資訊的中獎紀錄，前端會再跳一次表單。
-    // 帶 hotel 是因為表單要顯示【該獎項所屬飯店】的標誌與名稱 ——
-    // 高雄的兩項住宿大獎也走這條路（Tony 2026-09-01）。
+    // Wins still missing contact details; the front end asks again.
+    // The hotel comes along because the form shows the emblem and name of whichever
+    // property the prize belongs to, and two Kaohsiung room prizes take this path too.
     pendingContacts: pending.map((d) => ({
       drawId: d.id, prize: d.prize_name, tier: d.tier, code: d.code, hotel: d.hotel,
     })),
-    // 已填過個人資料就幫客人帶入，不用重打一次。
+    // Prefill from details already given, so nothing is typed twice.
     contactPrefill: profile[0] ?? null,
-    // 每人實體獎上限。前端據此在達標時停用抽獎鈕（伺服器端 /spin 另有一道硬擋）。
+    // Per-person prize limit. The front end disables the draw button on reaching it; /spin enforces it again server-side.
     physicalWins: physical[0].n,
     maxPhysicalWins: MAX_PHYSICAL_WINS,
   });
 });
 
-// ── 任務發幣 ───────────────────────────────────────────────────
+// -- task rewards -------------------------------------------------
 router.post("/tasks/:id/claim", liffAuth, async (req, res) => {
   const task = TASK_BY_ID[req.params.id];
   if (!task) return res.status(404).json({ error: "task_not_found" });
@@ -186,7 +190,7 @@ router.post("/tasks/:id/claim", liffAuth, async (req, res) => {
 
   try {
     const balance = await withTx(async (client) => {
-      // PK 衝突 = 已經領過。DO NOTHING + rowCount 判斷，天然防連點重複發幣。
+      // A primary-key conflict means it was already claimed. DO NOTHING plus a rowCount check makes repeat taps harmless on its own.
       const ins = await client.query(
         `INSERT INTO task_claims (line_user_id, task_id, reward)
          VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
@@ -203,7 +207,7 @@ router.post("/tasks/:id/claim", liffAuth, async (req, res) => {
   }
 });
 
-// ── 填個資（同時完成 profile 任務）────────────────────────────
+// -- details form (also completes the profile task) ---------------
 router.post("/profile", liffAuth, async (req, res) => {
   const name = String(req.body?.name ?? "").trim();
   const phone = String(req.body?.phone ?? "").replace(/[-\s]/g, "");
@@ -230,7 +234,7 @@ router.post("/profile", liffAuth, async (req, res) => {
            consent_kh = EXCLUDED.consent_kh, consent_tpe = EXCLUDED.consent_tpe`,
         [req.lineUserId, name, phone, email, consentKh, consentTpe],
       );
-      // 幣只發一次，重填資料不會再發。
+      // The coin is issued once; editing the details again does not issue another.
       const ins = await client.query(
         `INSERT INTO task_claims (line_user_id, task_id, reward)
          VALUES ($1, 'profile', $2) ON CONFLICT DO NOTHING`,
@@ -251,9 +255,11 @@ router.post("/profile", liffAuth, async (req, res) => {
   }
 });
 
-// ── 抽獎 ───────────────────────────────────────────────────────
-// 整段包在 transaction 裡：鎖玩家餘額 → 鎖該等級獎項列 → 加權抽 → 扣庫存 → 扣幣 → 開票。
-// 這是庫存不會超發的關鍵（前端純 Math.random 做不到這件事）。
+// -- draw ---------------------------------------------------------
+// The whole sequence runs in one transaction: lock the player's balance, lock the
+// tier's prize rows, draw by weight, decrement stock, charge coins, issue the
+// ticket. That is what stops stock being over-issued, and it is not something a
+// front end could do.
 router.post("/spin", liffAuth, async (req, res) => {
   const tier = Number(req.body?.tier);
   if (!TIERS.includes(tier)) return res.status(400).json({ error: "bad_tier" });
@@ -271,9 +277,11 @@ router.post("/spin", liffAuth, async (req, res) => {
       if (!player) throw Object.assign(new Error("no_player"), { status: 404 });
       if (player.balance < cost) throw Object.assign(new Error("insufficient_coins"), { status: 400 });
 
-      // 每人實體獎上限。刻意放在 players 那道 FOR UPDATE 之後 ——
-      // 同一個人連點兩次會被鎖序列化，不會兩發同時穿過上限。
-      // 一樣【不扣幣】：都不給抽了還收客人的幣，客訴與法遵風險都不划算。
+      // Per-person prize limit, checked after the FOR UPDATE on players on purpose: two
+      // rapid taps from one person are serialised by that lock, so they cannot both
+      // slip past the limit.
+      // No coins are charged here either -- charging for a draw that was refused is not
+      // worth the complaint or the compliance risk.
       if (MAX_PHYSICAL_WINS > 0) {
         const wins = await countPhysicalWins(client, req.lineUserId);
         if (wins >= MAX_PHYSICAL_WINS) {
@@ -281,8 +289,8 @@ router.post("/spin", liffAuth, async (req, res) => {
         }
       }
 
-      // 安慰獎即使 visible = false 也要能被抽到 ——
-      // 二等／一等不把 85 折列在獎項一覽裡（Tony 2026-09-04），但抽到還是要給。
+      // A consolation prize has to be drawable even with visible = false: the higher
+      // tiers do not list it, but it still has to be awarded when it comes up.
       const { rows: pool } = await client.query(
         `SELECT * FROM prizes
           WHERE tier = $1 AND active AND (visible OR is_consolation)
@@ -291,33 +299,33 @@ router.post("/spin", liffAuth, async (req, res) => {
           FOR UPDATE`,
         [tier],
       );
-      // 該等級的獎全部發完 → 不是錯誤，是「銘謝惠顧」。
+      // Every prize in this tier has gone. Not an error -- this is a losing draw.
       //
-      // 【要扣幣】（Tony 2026-09-04：公司決定要有銘謝惠顧機制，前台會對客人說明）。
-      // 原本刻意不扣，理由是「獎都沒了還收幣」客訴風險高；
-      // 現在改成扣，是為了讓一等／二等留在畫面上當目標時仍有成本，
-      // 而較低的等級仍有實體獎可拿，客人不會空手而回。
+      // Coins ARE charged. Originally they were not, on the grounds that charging when
+      // nothing is left invites complaints; charging keeps a cost on aiming at the top
+      // tiers while they remain on screen as a goal, and the lower tiers still hold
+      // physical prizes, so nobody leaves empty-handed.
       if (!pool.length) {
         await addCoins(client, req.lineUserId, -cost, "spin_miss", `tier${tier}_soldout`);
         return { soldOut: true, cost, balance: player.balance - cost };
       }
 
-      // 對 100 抽：權重總和不足 100 的缺口就是「這次沒中獎」。
+      // Drawing against a fixed denominator: the shortfall between the weights and that
+      // denominator is a losing draw.
       //
-      // 【要扣幣】（Tony 2026-09-02 第二版決定）——
-      // 不扣的話客人可以免費重抽到中獎為止，機率設定形同虛設。
+      // Coins ARE charged. Without that, a player could retry for free until they win
+      // and the weighting would mean nothing.
       //
-      // ⚠️ 與上面「該等級一件獎品都沒有」的 soldOut 是兩回事，那個【不扣】：
-      //    池子是空的代表客人本來就不可能中，收他的幣沒有道理。
-      //    前端也會把沒庫存的等級鎖起來，正常情況下客人根本選不到那一級。
-      // 抽到權重缺口 → 改發安慰獎（85 折餐飲優惠，不限量）。
-      // 這就是「85 折取代銘謝惠顧」的實作：只要池子裡有安慰獎，
-      // 客人就一定拿得到東西，不會出現空手而回。
-      // 獎品全部發完時，池子裡就只剩安慰獎。
+      // This is not the same as the sold-out case above, which does NOT charge: an
+      // empty pool means the player never had a chance, so taking their coins would not
+      // be defensible.
+      // Landing in the shortfall awards the consolation prize instead, which is
+      // unlimited. As long as one is in the pool nobody goes away with nothing, and
+      // once every other prize has gone the pool holds only this.
       const picked = weightedPick(pool, { outOf: 100 });
       const prize = picked ?? pool.find((x) => x.is_consolation);
 
-      // 真的連安慰獎都沒有（例如安慰獎被下架）才會走到這裡 —— 保留原本的銘謝惠顧。
+      // Only reachable with no consolation prize at all -- if it were deactivated, say -- so the original losing path is kept as a safety net.
       if (!prize) {
         await addCoins(client, req.lineUserId, -cost, "spin_miss", `tier${tier}`);
         return { missed: true, cost, balance: player.balance - cost };
@@ -337,9 +345,10 @@ router.post("/spin", liffAuth, async (req, res) => {
         balance = await addCoins(client, req.lineUserId, prize.coin_reward, "spin_reward", prize.id);
       }
 
-      // 虛擬獎（洲遊幣）直接入帳，不開票、不推播。
-      // 臺北的獎（claim_mode='contact'）也不開 claim_token —— 細則未定案，不發 Omnichat 券，
-      // 改請中獎者留聯絡資訊。兌換碼還是給，方便日後對帳與客服查詢。
+      // Coin rewards are credited directly: no ticket, no push.
+      // Prizes with claim_mode 'contact' get no claim token either. They issue no
+      // voucher and ask the winner for contact details instead. A redemption code is
+      // still produced, which makes reconciliation and support enquiries easier.
       const isContact = prize.claim_mode === "contact";
       const code = isCoinPrize ? null : makeCode();
       const claimToken = (isCoinPrize || isContact || !prize.coupon_link) ? null : makeClaimToken();
@@ -360,7 +369,7 @@ router.post("/spin", liffAuth, async (req, res) => {
     return res.status(500).json({ error: "internal_error" });
   }
 
-  // 已達每人實體獎上限 → 不轉盤、不扣幣，直接告訴客人。
+  // Per-person limit reached: no spin, no charge, tell the guest plainly.
   if (outcome.capReached) {
     return res.json({
       ok: true,
@@ -374,12 +383,12 @@ router.post("/spin", liffAuth, async (req, res) => {
     });
   }
 
-  // 機率性沒中獎（權重缺口）→ 銘謝惠顧，而且【有扣幣】。
+  // A losing draw from the shortfall. Coins ARE charged.
   if (outcome.missed) {
     return res.json({
       ok: true,
-      soldOut: true,          // 前端沿用同一套「銘謝惠顧」畫面
-      missed: true,           // 但文案要講清楚扣了幾枚
+      soldOut: true,          // the front end reuses the same screen
+      missed: true,           // but the copy has to say how many coins were taken
       prizeId: null,
       prize: "銘謝惠顧",
       tier,
@@ -391,7 +400,7 @@ router.post("/spin", liffAuth, async (req, res) => {
     });
   }
 
-  // 該等級已全數發完 → 回「銘謝惠顧」，前端照樣轉一圈再開獎，不當成錯誤。
+  // Tier sold out. Return the losing result; the front end still spins before revealing it, rather than treating it as an error.
   if (outcome.soldOut) {
     return res.json({
       ok: true,
@@ -409,12 +418,14 @@ router.post("/spin", liffAuth, async (req, res) => {
 
   const { draw, prize, balance, isCoinPrize, isContact } = outcome;
 
-  // 推播刻意放在 transaction 之外 —— LINE 掛掉不該讓客人已經抽中的獎消失。
+  // The push sits outside the transaction on purpose: LINE being down must not make
+  // a prize the guest has already won disappear.
   //
-  // 但也刻意【等它回來】才回應：轉盤動畫要跑 5.4 秒，LINE push 通常 <500ms，
-  // 客人不會感覺到延遲，我們卻能誠實告訴他券到底有沒有送出去。
-  // （非同步 fire-and-forget 的話，推播失敗時畫面仍會寫「已發送至你的 LINE」，
-  //   客人翻遍聊天室找不到券，只會變成客訴。）
+  // It is also awaited on purpose. The wheel animates for 5.4 seconds and a push
+  // usually takes under half of one, so the guest notices no delay while we can
+  // still tell them honestly whether the voucher went out. Fire-and-forget would
+  // leave the screen saying "sent to your LINE" after a failure, and the guest
+  // hunting through the chat for a voucher that is not there.
   let pushed = false;
   if (!isCoinPrize && draw.claim_token) {
     const r = await pushRewardCoupon(OA_HOTEL, req.lineUserId, {
@@ -429,9 +440,12 @@ router.post("/spin", liffAuth, async (req, res) => {
       [draw.id, r.ok, r.ok ? null : r.reason])
       .catch((e) => console.error("[spin] push 結果寫入失敗:", e));
   } else if (isContact) {
-    // contact 類的獎：推一則提醒，避免客人關掉彈窗後就忘了要留聯絡資訊。
-    // 走的還是高雄的 OA（客人是從那裡進來的），但內文要講對是哪一館提供的獎，
-    // 所以一定要帶 prizeHotel —— 漏傳的話訊息會退回「本酒店」這種沒頭沒尾的講法。
+    // Prizes that collect contact details get a reminder pushed, so a guest who
+    // closed the dialog does not simply forget.
+    // It goes through the Kaohsiung account, which is where the guest came from, but
+    // the text has to name the property that is actually giving the prize -- hence
+    // prizeHotel. Leave it out and the message falls back to saying "this hotel",
+    // which reads like nothing at all.
     const r = await pushContactReminder(OA_HOTEL, req.lineUserId, {
       prizeName: draw.prize_name,
       code: draw.code,
@@ -464,9 +478,9 @@ router.post("/spin", liffAuth, async (req, res) => {
   });
 });
 
-// ── 中獎聯絡資訊（臺北獎項專用）────────────────────────────────
-// 臺北洲際的兌換細則還沒定案 → 不發 Omnichat 券，改收聯絡方式，
-// 由臺北洲際的人後續以信件聯繫。
+// -- winner contact details ---------------------------------------
+// Taipei redemption terms are not settled, so no voucher is issued: contact
+// details are collected and Taipei follow up by email.
 router.post("/draws/:id/contact", liffAuth, async (req, res) => {
   const drawId = Number(req.params.id);
   if (!Number.isInteger(drawId)) return res.status(400).json({ error: "bad_draw_id" });
@@ -481,7 +495,7 @@ router.post("/draws/:id/contact", liffAuth, async (req, res) => {
   if (!/^09\d{8}$/.test(phone)) return res.status(400).json({ error: "phone_invalid" });
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: "email_invalid" });
 
-  // 一定要確認這筆中獎紀錄是【這個人自己的】，否則任何人都能覆蓋別人的聯絡資訊。
+  // Check the win actually belongs to this person, or anyone could overwrite somebody else's contact details.
   const { rows } = await query(
     `SELECT d.id, p.claim_mode
        FROM draws d JOIN prizes p ON p.id = d.prize_id

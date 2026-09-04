@@ -1,9 +1,10 @@
 /**
- * 洲遊幣 Lite —— Express 伺服器。
+ * InterCoins Lite -- Express server.
  *
- * 前端（public/）與 API（/api/*）由同一個服務、同一個網域提供。
- * 這是刻意的：味蕾旅遊地圖 POSTMORTEM Bug #9B 的教訓是前後端分網域時，
- * Flex 訊息裡的 /api/claim/:token 很容易指錯 host 而 404。同網域就沒這問題。
+ * The front end (public/) and the API (/api/*) are served by one service on one
+ * domain. That is deliberate: when they are split across domains, the
+ * /api/claim/:token URL inside a Flex message easily points at the wrong host and
+ * 404s. One domain removes the problem.
  */
 import express from "express";
 import { readFileSync } from "node:fs";
@@ -26,12 +27,13 @@ const PORT = Number(process.env.PORT) || 8080;
 
 const app = express();
 app.disable("x-powered-by");
-app.set("trust proxy", 1); // Zeabur gateway 在前面
+app.set("trust proxy", 1); // the platform gateway sits in front
 app.use(express.json({ limit: "64kb" }));
 
-// ── 健康檢查 ───────────────────────────────────────────────────
-// ⚠️ *_configured: true 只代表環境變數非空，不代表 key 有效（踩雷 T09）。
-//    要真的驗證請加 ?deep=1 —— 會實際打 LINE 與 DB 確認，並回報獎項庫存概況。
+// -- health check ------------------------------------------------
+// *_configured: true only means the variable is non-empty, not that the key
+// works. Add ?deep=1 to actually call LINE and the database, which also reports
+// the prize pool.
 app.get("/api/health", async (req, res) => {
   let db = "not_configured";
   if (hasDb) {
@@ -51,19 +53,21 @@ app.get("/api/health", async (req, res) => {
     line_channel_id_configured: Boolean(process.env.LINE_CHANNEL_ID),
     line_push_token_configured: Boolean(process.env.LINE_MESSAGING_ACCESS_TOKEN_KH),
     admin_token_configured: Boolean(process.env.ADMIN_TOKEN),
-    // 只回「有幾個後台帳號」，不回帳號名稱也不回密碼 —— 用來確認 ADMIN_USERS
-    // 真的被容器讀到了（設了環境變數沒重新部署是最常見的假上線）。
+    // Report how many admin accounts exist, never their names or passwords. This is
+    // how you confirm the container actually read ADMIN_USERS -- setting a variable
+    // and not redeploying is the most common way a change appears live but is not.
     admin_users_configured: adminUsers().length,
     public_base_url: process.env.PUBLIC_BASE_URL || null,
     time: new Date().toISOString(),
   };
 
   if (req.query.deep) {
-    // 真的打 LINE 問這把 token 有沒有效、對應到哪個官方帳號。
+    // ask LINE whether this token is valid, and which official account it belongs to
     out.line_push_token_verified = await verifyPushToken("KH");
 
-    // 任務清單（網址都是公開的社群連結，不涉機密）。
-    // 沒填網址的追蹤任務不會發布 —— 這裡看得出有沒有漏，也看得出每人上限幾枚幣。
+    // Task list. The URLs are public channel links, nothing confidential.
+    // A follow task with no URL is never published, so this also shows what is
+    // missing, and the per-person coin ceiling.
     out.tasks = {
       published: PUBLISHED_TASKS.length,
       maxEarnable: MAX_EARNABLE,
@@ -72,8 +76,9 @@ app.get("/api/health", async (req, res) => {
     };
     if (db === "ok") {
       const { rows } = await query(
-        // 條件要跟 /spin 的抽獎池一致 —— 安慰獎 visible=false 但抽得到。
-        // quota = 0 代表不限量，加總沒有意義，所以另外用 unlimited 計數。
+        // Match the draw pool in /spin exactly: a consolation prize is drawable even
+        // with visible = false. quota = 0 means unlimited, where a sum is meaningless,
+        // so those are counted separately.
         `SELECT hotel, claim_mode, count(*)::int AS prizes,
                 sum(quota)::int AS quota, sum(issued)::int AS issued,
                 (count(*) FILTER (WHERE quota = 0))::int AS unlimited
@@ -95,8 +100,9 @@ app.get("/api/health", async (req, res) => {
 });
 
 /**
- * 把 LIFF_ID 從伺服器端餵給前端，前端不用 build、也不用把 ID 寫死進 repo。
- * LIFF ID 本來就是公開資訊（會出現在網址列），這裡不涉及機密。
+ * Hand LIFF_ID to the front end from the server, so the front end needs no build
+ * step and the id is not baked into the repo. A LIFF id is public information --
+ * it appears in the address bar -- so nothing confidential passes through here.
  */
 app.get("/api/config.js", (_req, res) => {
   res.type("application/javascript").set("Cache-Control", "no-store");
@@ -115,15 +121,17 @@ app.use("/api/claim", claimRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", gameRoutes);
 
-// API 的 404 要回 JSON，不要掉進 SPA fallback 回 index.html
-// （否則前端 fetch 會拿到一坨 HTML 然後 JSON.parse 爆掉，很難查）。
+// A 404 under /api must answer JSON rather than falling through to the SPA and
+// returning index.html; otherwise fetch() receives a page of HTML, JSON.parse
+// throws, and the real cause is very hard to see.
 app.use("/api", (_req, res) => res.status(404).json({ error: "not_found" }));
 
 /**
- * public/*.html 一律【去掉註解】再送出。
+ * Every public/*.html file is served with its comments removed.
  *
- * 那些檔案是原封不動送到瀏覽器的，按 F12 就能整份讀完 —— 客人真的讀了，
- * 而且把裡面的內部註記當成可疑。原始碼保留完整說明，瀏覽器一個字都拿不到。
+ * Those files reach the browser byte for byte, and guests have read them: what
+ * they found looked, fairly, like something to be suspicious of. The source keeps
+ * its documentation and the browser receives none of it.
  */
 const PAGES = new Map();
 
@@ -138,7 +146,7 @@ function sendPage(res, name) {
   res.type("html").set("Cache-Control", "no-store").send(page(name));
 }
 
-// 直接指名 .html 的請求不交給 express.static —— 否則會繞過上面的去註解。
+// Requests that name a .html file directly must not reach express.static, or they would bypass the stripping above.
 app.get(/\.html$/i, (req, res, next) => {
   const name = req.path.slice(req.path.lastIndexOf("/") + 1);
   if (name === "index.html") return sendPage(res, "index.html");
@@ -147,11 +155,15 @@ app.get(/\.html$/i, (req, res, next) => {
 });
 
 /**
- * 後台頁面。【要先登入才拿得到 HTML】。
+ * The admin page. Signing in is required before the HTML is served.
  *
- * 從前這頁誰都下載得到：登入表單擋得住資料，擋不住原始碼 —— 後台的版面、
- * 欄位名與所有端點都一覽無遺。現在未登入只會拿到一頁登入表單。
- * 資料本身仍然一律要帶 Bearer 打 /api/admin/*，這道門禁是額外加的一層。
+ * This page used to be downloadable by anyone: the sign-in form kept people out
+ * of the data but not out of the source, where the panel's layout, its field
+ * names and every endpoint it calls were all plainly visible. An unauthenticated
+ * visitor now receives a sign-in page and nothing else.
+ *
+ * Data still requires a bearer token on /api/admin/*. This gate is one more layer,
+ * not a replacement for that.
  */
 app.get("/admin", (req, res) => {
   res.setHeader("X-Robots-Tag", "noindex, nofollow");
@@ -162,7 +174,7 @@ app.use(express.static(PUBLIC_DIR, {
   index: false,
   maxAge: "1h",
   setHeaders(res, path) {
-    // 圖檔可以放心長快取。
+    // images are safe to cache for a long time
     if (/\.(png|jpe?g|webp|mp4|woff2?)$/.test(path)) {
       res.setHeader("Cache-Control", "public, max-age=604800, immutable");
     }
@@ -171,8 +183,9 @@ app.use(express.static(PUBLIC_DIR, {
 
 app.get("*", (_req, res) => sendPage(res, "index.html"));
 
-// 統一錯誤處理。POSTMORTEM Bug #3 的教訓：不要把所有錯誤吞成同一個誤導訊息，
-// 一定要把真實原因帶出來，否則現場只會看到「無效」然後所有人猜錯方向。
+// One error handler. Do not collapse every failure into the same misleading
+// message -- carry the real cause out, or the only thing anyone sees on the day
+// is "invalid" and everybody guesses in the wrong direction.
 app.use((err, _req, res, _next) => {
   console.error("[unhandled]", err);
   res.status(err.status || 500).json({
@@ -186,7 +199,8 @@ async function main() {
     const ready = await ensureSchema();
     if (ready) await seedPrizes();
   } catch (err) {
-    // DB 掛掉不該讓整個站台起不來 —— 靜態頁還是要看得到，健康檢查會說明原因。
+    // A database outage must not stop the site booting -- the static pages should
+    // still load, and the health check explains why the rest is down.
     console.error("[boot] 資料庫初始化失敗，以降級模式啟動:", err.message);
   }
   app.listen(PORT, "0.0.0.0", () => {

@@ -1,19 +1,20 @@
 /**
- * 後台身分驗證 —— 個人帳號，不是一組共用密碼。
+ * Admin authentication -- individual accounts, not one shared password.
  *
- * 為什麼不用單一 ADMIN_TOKEN 就好（Tony 2026-09-01「要特定的人才能看到」）：
- * 中獎名單裡有中獎者的姓名 / 手機 / Email，是個資。一組共用密碼會被轉傳、
- * 離職也收不回、而且出事查不出是誰看的。改成個人帳號後：
- *   - 要移除某個人，只要從 ADMIN_USERS 拿掉他那組，其他人不受影響
- *   - 每次查名單都留下是「誰」查的（admin_access_log）
+ * Why not a single ADMIN_TOKEN: the winners list carries names, phone numbers and
+ * email addresses. A shared password gets forwarded, cannot be taken back when
+ * someone leaves, and leaves no way to tell who looked at what. With individual
+ * accounts, removing one person means removing their entry from ADMIN_USERS and
+ * nobody else is disturbed, and every look at the list records who did it
+ * (admin_access_log).
  *
- * 環境變數：
- *   ADMIN_USERS = "tony:密碼A,kh-mktg:密碼B,tpe-mktg:密碼C"
- *     帳號不分大小寫；密碼區分大小寫；用逗號分隔多組。
- *     ⚠️ 密碼裡不能有逗號或冒號。
- *   ADMIN_TOKEN = 主金鑰，給 curl / 自動化用（會記成使用者 "master"）。
+ * Environment:
+ *   ADMIN_USERS = "alice:passwordA,kh-mktg:passwordB,tpe-mktg:passwordC"
+ *     Usernames are case-insensitive, passwords are not; entries are
+ *     comma-separated, and a password may contain neither a comma nor a colon.
+ *   ADMIN_TOKEN = master key for curl and automation; logged as user "master".
  *
- * 兩個都沒設 → 後台整個停用（回 503）。
+ * With neither set, the admin API is disabled and answers 503.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 
@@ -23,12 +24,12 @@ function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
 }
 
-/** 由帳密推導出的 token —— 密碼本身不會出現在瀏覽器儲存或網路請求標頭裡。 */
+/** Token derived from the credentials, so the password itself never reaches browser storage or a request header. */
 export function tokenFor(username, password) {
   return sha256(`${username}:${password}:${SALT}`);
 }
 
-/** 解析 ADMIN_USERS。格式錯的那一組會被跳過並印警告，不會讓整個後台掛掉。 */
+/** Parse ADMIN_USERS. A malformed entry is skipped with a warning rather than taking the whole admin API down. */
 export function adminUsers() {
   const raw = process.env.ADMIN_USERS || "";
   const users = [];
@@ -47,14 +48,14 @@ export function adminUsers() {
   return users;
 }
 
-/** 定時安全比對，避免用回應時間猜 token。 */
+/** Constant-time comparison, so response timing cannot be used to guess a token. */
 function sameToken(a, b) {
   const x = Buffer.from(String(a));
   const y = Buffer.from(String(b));
   return x.length === y.length && timingSafeEqual(x, y);
 }
 
-/** 由請求解出是哪一位使用者；認不出來回 null。 */
+/** Work out which user this request is; null when it is nobody we know. */
 export function adminFromRequest(req) {
   const header = req.header("authorization") || "";
   const provided = header.startsWith("Bearer ") ? header.slice(7).trim() : req.query.token;
@@ -83,16 +84,19 @@ export function requireAdmin(req, res, next) {
   next();
 }
 
-/* ──────────────────────────────────────────────────────────────
- * 後台【頁面】的門禁
+/*
+ * The gate on the admin PAGE.
  *
- * /admin 的 HTML 從前是誰都拿得到的：登入表單擋得住資料，擋不住原始碼，
- * 整份後台的結構、欄位名與端點都攤在外面。現在頁面本身也要先驗身分。
+ * The /admin HTML used to be available to anyone. The sign-in form kept people
+ * out of the data, but not out of the source: the panel's structure, its field
+ * names and its endpoints were all there to read. The page itself now needs a
+ * session too.
  *
- * ⚠️ 這個 cookie 只用來決定「要不要把 HTML 吐出去」，
- *    /api/admin/* 一律維持 Bearer —— cookie 不能拿來操作任何資料，
- *    所以不存在 CSRF 面（別人的網站誘導瀏覽器發請求也只會拿到一頁 HTML）。
- * ────────────────────────────────────────────────────────────── */
+ * This cookie decides one thing only: whether the HTML is sent. /api/admin/*
+ * stays bearer-only, so the cookie cannot read or change any data and there is no
+ * CSRF surface -- another site can lead a browser here and get back a page, and
+ * nothing more.
+ */
 export const ADMIN_COOKIE = "ic_admin";
 
 function cookiesOf(req) {
@@ -104,7 +108,7 @@ function cookiesOf(req) {
   return out;
 }
 
-/** 這個請求可以拿到後台頁面嗎？只看 cookie，不看 Bearer。 */
+/** May this request have the admin page? Cookie only; the bearer token is not consulted. */
 export function adminPageAllowed(req) {
   const token = cookiesOf(req)[ADMIN_COOKIE];
   if (!token) return false;
@@ -113,7 +117,7 @@ export function adminPageAllowed(req) {
   return adminUsers().some((u) => sameToken(token, u.token));
 }
 
-/** 登入成功後發給瀏覽器的門禁 cookie。 */
+/** The page-access cookie handed to the browser after a successful sign-in. */
 export function setAdminCookie(req, res, token) {
   res.cookie(ADMIN_COOKIE, token, {
     httpOnly: true,

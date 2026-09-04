@@ -1,19 +1,21 @@
 /**
- * GET /api/claim/:token —— 單次有效的獎品領取轉址。
+ * GET /api/claim/:token -- single-use redirect to collect a prize.
  *
- * 為什麼需要這層（味蕾旅遊地圖 POSTMORTEM Bug #9 的教訓）：
- *   Omnichat 的 bind URL 是【完全 stateless】的，沒有 per-user dedup。
- *   點一次發一張券、點 N 次發 N 張。而 LINE Flex 訊息會永遠留在對話歷史裡，
- *   客人只要一直點就能無限領券。Omnichat 那邊我們改不了，只能自己包一層。
+ * Why this layer exists: the voucher provider's bind URL is completely stateless
+ * and does not deduplicate per user. One tap issues one voucher, so N taps issue
+ * N vouchers -- and a LINE Flex message stays in the chat history forever, so a
+ * guest could simply keep tapping. That behaviour is not ours to change, so it is
+ * wrapped here.
  *
- * 作法：atomic UPDATE ... WHERE claim_token=$1 AND claim_used_at IS NULL。
- *   rowCount == 1 → 第一次點 → 302 到 Omnichat（券發出）
- *   rowCount == 0 → 重複點或 token 不存在 → 顯示「已領取」頁
- * 併發連點由 Postgres 序列化，只有一次會贏。
+ * How: an atomic UPDATE ... WHERE claim_token = $1 AND claim_used_at IS NULL.
+ *   rowCount 1  first tap      -> 302 onward, the voucher is issued
+ *   rowCount 0  repeat or bad token -> show the "already collected" page
+ * Concurrent taps are serialised by Postgres, so exactly one wins.
  *
- * ⚠️ 這個路由必須跟 Flex 按鈕的網域一致（POSTMORTEM Bug #9B：wrapper URL 指到
- *    已停用/錯誤的網域會 404）。本專案前後端同一個 Express 服務、同一個網域，
- *    所以只要 PUBLIC_BASE_URL 設對就不會重蹈覆轍。
+ * This route has to sit on the same domain as the button in the Flex message: a
+ * wrapper URL pointing at a retired or mistyped host 404s. Front end and API are
+ * one Express service on one domain here, so getting PUBLIC_BASE_URL right is
+ * enough.
  */
 import { asyncRouter } from "../lib/router.js";
 import { query } from "../db.js";
@@ -22,7 +24,7 @@ const router = asyncRouter();
 
 const LINE_OA_URL = process.env.LINE_ADD_FRIEND_URL || "https://lin.ee/uKzkNI9";
 
-/** 直接由後端 inline 渲染，不跨網域轉址（POSTMORTEM Bug #9B）。 */
+/** Rendered inline by the server rather than redirected across domains. */
 function noticePage({ title, body, cta }) {
   return `<!DOCTYPE html>
 <html lang="zh-Hant">
@@ -77,7 +79,7 @@ router.get("/:token", async (req, res) => {
       if (prize?.coupon_link) {
         return res.redirect(302, prize.coupon_link);
       }
-      // 有票但沒有 Omnichat 連結 —— 資料設定漏了，讓客人拿得到憑證去櫃檯。
+      // A winning entry with no voucher link: a data gap, so give the guest something they can take to the front desk.
       console.error(`[claim] ${rows[0].prize_id} 沒有 coupon_link，無法轉址`);
       return res.status(200).send(noticePage({
         title: "請至櫃檯領取",
@@ -85,14 +87,14 @@ router.get("/:token", async (req, res) => {
       }));
     }
 
-    // 沒中 = 已領過，或 token 根本不存在。一律導向同一頁，不洩漏 token 是否存在。
+    // No row means already collected, or the token never existed. Both go to the same page, so nothing reveals whether a token is real.
     return res.status(200).send(noticePage({
       title: "此連結已使用過",
       body: "這張券已經領取完成了。<br/>您先前領到的優惠券都在 LINE 聊天室裡，<br/>可以直接打開查看。",
       cta: { href: LINE_OA_URL, label: "打開 LINE 官方帳號" },
     }));
   } catch (err) {
-    // POSTMORTEM Bug #3 的教訓：不要把所有錯誤都吞成同一個誤導訊息。
+    // Do not collapse every failure into the same misleading message.
     console.error("[claim] 失敗:", err);
     return res.status(500).send(noticePage({
       title: "系統忙碌中",

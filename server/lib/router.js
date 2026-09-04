@@ -1,14 +1,14 @@
 /**
- * 會自動接住 async 例外的 Router。
+ * A Router that catches async exceptions on its own.
  *
- * 為什麼需要：Express 4 的 route handler 如果是 async function 且 reject，
- * 例外【不會】被送到錯誤處理 middleware —— 請求就這樣掛著，直到 client 逾時。
- * 前端只會看到「Failed to fetch」，伺服器 log 只有 UnhandledPromiseRejection，
- * 完全查不出真正原因。這就是味蕾旅遊地圖 POSTMORTEM Bug #3 的同一個坑：
- * 錯誤被吃掉 → 現場所有人猜錯方向。
+ * Why it is needed: in Express 4, when an async route handler rejects, the
+ * exception never reaches the error-handling middleware. The request simply hangs
+ * until the client times out. The front end shows only "Failed to fetch" and the
+ * server log only an unhandled rejection, so the real cause is invisible.
  *
- * 用 asyncRouter() 取代 express.Router()，get/post/patch/put/delete 的 handler
- * 都會自動包上 .catch(next)，忘記寫 try/catch 也不會讓請求 hang 住。
+ * Use asyncRouter() instead of express.Router() and the handlers passed to get,
+ * post, patch, put and delete are wrapped in .catch(next), so a missing try/catch
+ * cannot leave a request hanging.
  */
 import { Router } from "express";
 
@@ -16,7 +16,7 @@ const METHODS = ["get", "post", "put", "patch", "delete", "all", "use"];
 
 function wrap(fn) {
   if (typeof fn !== "function") return fn;
-  // 錯誤處理 middleware 是 4 個參數，不能包（包了就不再是錯誤處理器）。
+  // Error-handling middleware takes four arguments and must not be wrapped -- wrapping it stops it being an error handler.
   if (fn.length === 4) return fn;
   const wrapped = (req, res, next) => {
     try {

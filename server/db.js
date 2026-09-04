@@ -1,9 +1,9 @@
 /**
- * Postgres 連線池 + schema。
+ * Postgres pool and schema.
  *
- * Zeabur 綁 PostgreSQL 服務後會自動注入 DATABASE_URL。
- * 本機開發若沒設 DATABASE_URL，伺服器會以「無資料庫模式」啟動（只服務靜態檔），
- * 讓你可以純看前端而不用先架 DB。
+ * The host injects DATABASE_URL when a PostgreSQL service is attached. Without
+ * it the server still boots, in a no-database mode that serves the static files
+ * only, so the front end can be worked on without standing a database up first.
  */
 import pg from "pg";
 
@@ -14,7 +14,7 @@ export const hasDb = Boolean(process.env.DATABASE_URL);
 export const pool = hasDb
   ? new Pool({
       connectionString: process.env.DATABASE_URL,
-      // Zeabur 內網連線不需要 TLS；外部連線才需要。以 sslmode 參數為準。
+      // Internal connections need no TLS; external ones do. Go by the sslmode parameter.
       ssl: /sslmode=require/.test(process.env.DATABASE_URL) ? { rejectUnauthorized: false } : false,
       max: 10,
       idleTimeoutMillis: 30_000,
@@ -30,7 +30,7 @@ export async function query(text, params) {
   return pool.query(text, params);
 }
 
-/** 在單一 transaction 內執行 fn(client)。拋錯自動 ROLLBACK。 */
+/** Run fn(client) inside one transaction. A thrown error rolls back. */
 export async function withTx(fn) {
   if (!pool) throw new Error("DATABASE_URL not configured");
   const client = await pool.connect();
@@ -48,8 +48,9 @@ export async function withTx(fn) {
 }
 
 /**
- * Idempotent DDL —— 每次啟動都跑，安全可重複執行。
- * (刻意不用 migration 工具：這個專案只有一組表，raw DDL 比較好讀也好救。)
+ * Idempotent DDL, run on every boot and safe to repeat.
+ * (No migration tool on purpose: one set of tables is easier to read and to
+ * repair as raw DDL.)
  */
 export const SCHEMA_SQL = `
 -- 玩家（= LINE 使用者）
