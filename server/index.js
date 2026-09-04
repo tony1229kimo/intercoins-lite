@@ -15,7 +15,7 @@ import { ensureSchema, hasDb, query } from "./db.js";
 import { seedPrizes } from "./prizes.js";
 import { verifyPushToken } from "./lib/line.js";
 import { TASKS, PUBLISHED_TASKS, MAX_EARNABLE } from "./lib/tasks.js";
-import { adminUsers, adminPageAllowed } from "./middleware/adminAuth.js";
+import { adminUsers, adminPageAllowed, adminFromRequest } from "./middleware/adminAuth.js";
 import { stripComments } from "./lib/htmlComments.js";
 import gameRoutes from "./routes/game.js";
 import claimRoutes from "./routes/claim.js";
@@ -62,6 +62,14 @@ app.get("/api/health", async (req, res) => {
   };
 
   if (req.query.deep) {
+    // The deep check reports live stock, how much of it has gone, and how many
+    // people have played. That is operational detail, and this endpoint has no
+    // other protection, so it needs the admin token. The shallow check above
+    // stays open: it carries only booleans, and uptime monitoring reads it.
+    if (!adminFromRequest(req)) {
+      return res.status(401).json({ ...out, deep: "unauthorized" });
+    }
+
     // ask LINE whether this token is valid, and which official account it belongs to
     out.line_push_token_verified = await verifyPushToken("KH");
 

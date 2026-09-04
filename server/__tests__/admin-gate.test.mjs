@@ -78,3 +78,21 @@ test("a truncated token is rejected rather than matching a prefix", () => {
   assert.equal(adminPageAllowed(req({ cookie: `${ADMIN_COOKIE}=${short}` })), false);
   assert.equal(adminFromRequest(req({ authorization: `Bearer ${short}` })), null);
 });
+
+/**
+ * /api/health?deep=1 has no other protection and reports live stock, how much
+ * has gone and how many people have played -- operational detail that was
+ * readable by anyone with curl. Booting the whole app in a test would mean
+ * standing up the database, so this checks the guard is still in the source.
+ */
+test("the deep health check is behind the admin token", async () => {
+  const { readFileSync } = await import("node:fs");
+  const path = await import("node:path");
+  const src = readFileSync(path.join(import.meta.dirname, "..", "index.js"), "utf8");
+  const branch = src.slice(src.indexOf("if (req.query.deep)"));
+  const guard = branch.indexOf("adminFromRequest");
+  const firstQuery = branch.indexOf("prize_pool");
+  assert.ok(guard > -1, "the deep branch no longer checks adminFromRequest");
+  assert.ok(guard < firstQuery,
+    "the admin check has to come before any operational data is gathered");
+});
