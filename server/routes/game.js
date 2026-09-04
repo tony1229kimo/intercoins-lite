@@ -281,9 +281,11 @@ router.post("/spin", liffAuth, async (req, res) => {
         }
       }
 
+      // 安慰獎即使 visible = false 也要能被抽到 ——
+      // 二等／一等不把 85 折列在獎項一覽裡（Tony 2026-09-04），但抽到還是要給。
       const { rows: pool } = await client.query(
         `SELECT * FROM prizes
-          WHERE tier = $1 AND active AND visible
+          WHERE tier = $1 AND active AND (visible OR is_consolation)
             AND weight > 0 AND (quota = 0 OR issued < quota)
           ORDER BY position
           FOR UPDATE`,
@@ -308,7 +310,14 @@ router.post("/spin", liffAuth, async (req, res) => {
       // ⚠️ 與上面「該等級一件獎品都沒有」的 soldOut 是兩回事，那個【不扣】：
       //    池子是空的代表客人本來就不可能中，收他的幣沒有道理。
       //    前端也會把沒庫存的等級鎖起來，正常情況下客人根本選不到那一級。
-      const prize = weightedPick(pool, { outOf: 100 });
+      // 抽到權重缺口 → 改發安慰獎（85 折餐飲優惠，不限量）。
+      // 這就是「85 折取代銘謝惠顧」的實作：只要池子裡有安慰獎，
+      // 客人就一定拿得到東西，不會出現空手而回。
+      // 獎品全部發完時，池子裡只剩安慰獎 → 100% 發它。
+      const picked = weightedPick(pool, { outOf: 100 });
+      const prize = picked ?? pool.find((x) => x.is_consolation);
+
+      // 真的連安慰獎都沒有（例如安慰獎被下架）才會走到這裡 —— 保留原本的銘謝惠顧。
       if (!prize) {
         await addCoins(client, req.lineUserId, -cost, "spin_miss", `tier${tier}`);
         return { missed: true, cost, balance: player.balance - cost };

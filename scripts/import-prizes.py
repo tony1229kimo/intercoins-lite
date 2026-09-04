@@ -45,6 +45,23 @@ TIER_LABEL = {5: "一等獎", 3: "二等獎", 1: "三等獎"}
 #
 # ⚠️ 這些獎項在 Excel 裡照樣有 Omnichat 連結，我們照樣存進 DB 但【不使用】；
 #    日後要改回發券，把該 id 從 CONTACT_PRIZES 拿掉重跑匯入即可，程式不用動。
+# ── 2026-09-04 Tony 提供的新券（Excel 裡還是舊連結，這裡覆蓋）──────
+LINK_OVERRIDE = {
+    "kh-1-4": ("https://api.omnichat.ai/restapi/v1/omo/bind/"
+               "6a9a4058f1007f264be3093d?platform=line&channelId=1656533412"),
+    "kh-1-3": ("https://api.omnichat.ai/restapi/v1/omo/bind/"
+               "6a9a4033318db607041e9d61?platform=line&channelId=1656533412"),
+}
+
+# ── 安慰獎：85 折餐飲優惠，取代「銘謝惠顧」──────────────────────
+# quota=0 代表不限量。三個等級各一張，抽到機率缺口時由 game.js 補上。
+# ⚠️ 這三筆不在 Excel 裡，是程式加的 —— 重跑匯入時務必保留，
+#    否則 seedPrizes 會把它們判定為「不在 seed 中」而自動下架。
+CONSOLATION_LINK = ("https://api.omnichat.ai/restapi/v1/omo/bind/"
+                    "6a9a4009390b0458d0e7e487?platform=line&channelId=1656533412")
+CONSOLATION_NAME = "高雄洲際酒店 餐飲 85 折優惠禮遇"
+CONSOLATION_WEIGHT = {1: 50.0, 3: 100.0, 5: 100.0}
+
 DEFAULT_CLAIM_MODE = {"KH": "coupon", "TPE": "contact"}
 
 CONTACT_PRIZES = {

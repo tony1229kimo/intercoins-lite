@@ -61,8 +61,8 @@ export async function seedPrizes() {
     await query(
       `INSERT INTO prizes
          (id, hotel, tier, slot, position, name, claim_mode, coupon_link, coin_reward,
-          quota, weight, spend_threshold, terms, expiry_note, visible, active)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,true)
+          quota, weight, spend_threshold, terms, expiry_note, is_consolation, visible, active)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,true,true)
        ON CONFLICT (id) DO UPDATE SET
          hotel           = EXCLUDED.hotel,
          tier            = EXCLUDED.tier,
@@ -75,11 +75,12 @@ export async function seedPrizes() {
          spend_threshold = EXCLUDED.spend_threshold,
          terms           = EXCLUDED.terms,
          expiry_note     = EXCLUDED.expiry_note,
+         is_consolation  = EXCLUDED.is_consolation,
          ${RESEED_OPS ? "quota = EXCLUDED.quota, weight = EXCLUDED.weight," : ""}
          updated_at      = now()`,
       [p.id, p.hotel, p.tier, p.slot, p.position ?? 0, p.name, p.claim_mode ?? "coupon",
        p.coupon_link, p.coin_reward, p.quota, p.weight, p.spend_threshold,
-       p.terms, p.expiry_note],
+       p.terms, p.expiry_note, p.is_consolation === true],
     );
   }
 

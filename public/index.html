@@ -1360,9 +1360,12 @@ async function spin(){
     // 停在某個獎品格上卻說「銘謝惠顧」畫面會自相矛盾。
     target = -(Math.floor(Math.random()*n) + 0.5) * step;
   }else{
-    let idx=items.findIndex(p=>p.id===result.prizeId);
-    if(idx<0) idx=0;
-    target = -idx*step;
+    const idx=items.findIndex(p=>p.id===result.prizeId);
+    // 中的獎不在盤面上（例如二等／一等的安慰獎刻意不列進獎項一覽）→
+    // 停在兩格之間，不要硬停在某個獎品格上假裝中了那一格（那會自相矛盾）。
+    target = idx < 0
+      ? -(Math.floor(Math.random()*n) + 0.5) * step
+      : -idx*step;
   }
   const base=wheelAngle, targetMod=norm(target), align=norm(targetMod - norm(base));
   const dur = REDUCE ? 700 : 5400, turns = REDUCE ? 1 : 6;

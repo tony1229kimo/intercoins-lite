@@ -19,6 +19,7 @@ export const DB = {
   player: null,
   draws: [],
   prize: null,
+  pool: null,              // 設了就當成整個抽獎池（可含安慰獎）
   pushes: [],
 };
 
@@ -26,6 +27,7 @@ export function resetDB({ balance = 8 } = {}) {
   DB.player = { line_user_id: "U_test", display_name: "測試", picture_url: null, balance };
   DB.draws = [];
   DB.pushes = [];
+  DB.pool = null;          // 預設用單件的 DB.prize；要測整池就自己設 DB.pool
   DB.prize = {
     id: "kh-3-1", hotel: "KH", tier: 1, position: 0, name: "測試實體獎",
     claim_mode: "coupon", coupon_link: "https://example.invalid/x",
@@ -42,11 +44,16 @@ function run(sql, params = []) {
   if (q.includes("COUNT(*)::int AS n FROM draws")) {
     return { rows: [{ n: DB.draws.filter((d) => d.coin_reward === 0).length }] };
   }
-  // DB.prize = null 代表「這個等級一件獎品都沒有」（池子是空的）
-  if (q.startsWith("SELECT * FROM prizes")) return { rows: DB.prize ? [{ ...DB.prize }] : [] };
+  // 抽獎池：DB.pool 有設就用它（可以放多件、含安慰獎），
+  // 否則退回單件的 DB.prize；DB.prize = null 代表這個等級一件都沒有。
+  if (q.startsWith("SELECT * FROM prizes")) {
+    if (DB.pool) return { rows: DB.pool.map((x) => ({ ...x })) };
+    return { rows: DB.prize ? [{ ...DB.prize }] : [] };
+  }
   if (q.startsWith("UPDATE prizes SET issued")) {
-    DB.prize.issued++;
-    return { rowCount: 1, rows: [{ issued: DB.prize.issued }] };
+    const target = (DB.pool || []).find((x) => x.id === params[0]) || DB.prize;
+    if (target) target.issued++;
+    return { rowCount: 1, rows: [{ issued: target ? target.issued : 1 }] };
   }
   if (q.startsWith("UPDATE players SET balance")) {
     DB.player.balance += params[1];
