@@ -128,10 +128,10 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     ["2", "客人怎麼參加", "How Guests Join"],
     ["3", "客人怎麼玩", "How the Game Works"],
     ["4", "⭐ 兩種領獎方式", "Two Ways Prizes Are Claimed"],
-    ["5", "櫃檯核銷步驟", "Counter Redemption Procedure"],
-    ["6", "常見問題與標準回答", "FAQ & Suggested Replies"],
-    ["7", "不可以對客人說的事", "What Not to Disclose"],
-    ["8", "什麼狀況要往上回報", "When to Escalate"],
+    ["5", "⭐ 只有兌換碼、沒有券", "Code but No Coupon"],
+    ["6", "櫃檯核銷步驟", "Counter Redemption Procedure"],
+    ["7", "常見問題與標準回答", "FAQ & Suggested Replies"],
+    ["8", "不可以對客人說的事 / 何時回報", "What Not to Disclose / When to Escalate"],
   ];
   items.forEach(([num, zh, en], i) => {
     const x = i < 4 ? 0.65 : 5.15;
@@ -141,8 +141,8 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     s.addText(en, { x: x + 0.42, y: y + 0.29, w: 3.7, h: 0.26, fontFace: FONT, fontSize: 9.5, color: GREY });
   });
   callout(s, { x: 0.55, y: 4.75, w: 8.9, h: 0.55, tone: "info", icon: "📖",
-    zh: "第 4 章是本次最容易搞錯的部分（領獎方式看獎品、不看飯店），請務必看完。",
-    en: "Section 4 is the most commonly misunderstood part — please read it carefully." });
+    zh: "第 4、5 章是最容易搞錯的部分（領獎方式看獎品不看飯店；只有兌換碼有兩種人），請務必看完。",
+    en: "Sections 4 and 5 are the most commonly misunderstood — please read them carefully." });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -234,9 +234,9 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     s.addText(cost, { x: 7.75, y: y + 0.02, w: 1.5, h: 0.3, fontFace: FONT, fontSize: 8.5, color: GOLD, align: "center", valign: "middle" });
   });
 
-  callout(s, { x: 0.55, y: 4.5, w: 8.9, h: 0.62, tone: "info", icon: "🎡",
-    zh: "轉盤上同時有兩家飯店的獎品，客人抽到哪一家的獎是隨機的。",
-    en: "The wheel contains prizes from both hotels; which hotel a guest wins from is random." });
+  callout(s, { x: 0.55, y: 4.5, w: 8.9, h: 0.62, tone: "bad", icon: "🪙",
+    zh: "每抽一次都會扣洲遊幣，沒有中獎也一樣扣。這是客人最常抱怨的一點。",
+    en: "Coins are deducted on every spin, including when nothing is won. This is the most common complaint." });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -320,11 +320,50 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
 // 8 · 櫃檯核銷步驟
 // ══════════════════════════════════════════════════════════════
 {
-  const s = slide("五、櫃檯核銷步驟（高雄）", "Counter Redemption Procedure (Kaohsiung)");
+  const s = slide("五、⭐ 只有兌換碼、沒有優惠券", "Code but No Coupon　—　有兩種人，要分開處理 / Two different cases");
+  s.addText(bi("同樣是「只有兌換碼」，有的人是真的中獎，有的人要等專人聯繫。看獎品名稱就能分。",
+    "Both look the same. Tell them apart by the prize name.",
+    { zhSize: 12, bold: true, color: GOLD }),
+    { x: 0.7, y: 1.26, w: 8.6, h: 0.5, fontFace: FONT, lineSpacing: 17 });
+
+  // 左：受理
+  s.addShape(p.ShapeType.roundRect, { x: 0.55, y: 1.86, w: 4.3, h: 2.4, rectRadius: 0.08,
+    fill: { color: OK_BG }, line: { color: OK, width: 1.2 } });
+  s.addText([{ text: "✅  是真的中獎 → 受理\n", options: { fontSize: 13.5, bold: true, color: OK } },
+             { text: "A genuine win — accept it", options: { fontSize: 9, color: GREY } }],
+    { x: 0.78, y: 2.0, w: 3.9, h: 0.5, fontFace: FONT, lineSpacing: 15 });
+  s.addText([
+    { text: "獎品是「高雄洲際酒店」的實體小物或餐飲券\n", options: { bold: true } },
+    { text: "Kaohsiung merchandise or dining vouchers\n\n", options: { fontSize: 8.5, color: GREY } },
+    { text: "系統曾經發生異常，券沒送進客人的 LINE。\n", options: {} },
+    { text: "獎品確實是他的 —— 請受理並回報主管確認。", options: { bold: true } },
+  ], { x: 0.78, y: 2.56, w: 3.9, h: 1.6, fontFace: FONT, fontSize: 10.5, color: INK, lineSpacing: 16 });
+
+  // 右：不核銷
+  s.addShape(p.ShapeType.roundRect, { x: 5.15, y: 1.86, w: 4.3, h: 2.4, rectRadius: 0.08,
+    fill: { color: BAD_BG }, line: { color: BAD, width: 1.2 } });
+  s.addText([{ text: "🚫  專人聯繫類 → 不核銷\n", options: { fontSize: 13.5, bold: true, color: BAD } },
+             { text: "Follow-up prize — do not redeem", options: { fontSize: 9, color: GREY } }],
+    { x: 5.38, y: 2.0, w: 3.9, h: 0.5, fontFace: FONT, lineSpacing: 15 });
+  s.addText([
+    { text: "① 獎品名稱有「臺北洲際酒店」\n② 任何「住宿一晚」的獎項\n", options: { bold: true } },
+    { text: "Any Taipei prize, or any room stay\n\n", options: { fontSize: 8.5, color: GREY } },
+    { text: "這類獎項本來就不發券，由該館同仁主動聯繫。\n", options: {} },
+    { text: "請告知客人會有專人聯繫，並回報主管。", options: { bold: true } },
+  ], { x: 5.38, y: 2.56, w: 3.9, h: 1.6, fontFace: FONT, fontSize: 10.5, color: INK, lineSpacing: 16 });
+
+  callout(s, { x: 0.55, y: 4.42, w: 8.9, h: 0.7, tone: "info", icon: "🔑",
+    zh: "一句話：看到「臺北」或「住宿」→ 不核銷；其餘高雄的實體小物與餐飲券 → 受理，回報主管。",
+    en: "In short: Taipei or room stay → do not redeem. Other Kaohsiung items → accept and report to your supervisor." });
+}
+
+// ══════════════════════════════════════════════════════════════
+{
+  const s = slide("六、櫃檯核銷步驟（高雄）", "Counter Redemption Procedure (Kaohsiung)");
   step(s, { y: 1.4, num: 1, zh: "請客人出示 LINE 中的優惠券畫面與兌換碼",
     en: "Ask the guest to show the coupon in LINE, along with the redemption code" });
-  step(s, { y: 2.05, num: 2, zh: "沒有優惠券、只有兌換碼 → 是專人聯繫的獎項，不核銷",
-    en: "A code with no coupon means it is a follow-up prize — do not redeem" });
+  step(s, { y: 2.05, num: 2, zh: "沒有優惠券、只有兌換碼 → 先看獎品名稱再決定（見下一頁）",
+    en: "A code with no coupon — check the prize name first (see next page)" });
   step(s, { y: 2.7, num: 3, zh: "依券面規則辦理（部分獎品有消費門檻或指定地點／時段）",
     en: "Follow the terms shown on the coupon — some prizes have a minimum spend, venue or time window" });
   step(s, { y: 3.35, num: 4, zh: "核銷後交付獎品",
@@ -334,15 +373,15 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     zh: "無法確認時，不要自行判斷。",
     en: "If anything is unclear, do not decide on your own — contact your supervisor to check the record." });
   callout(s, { x: 5.15, y: 4.1, w: 4.3, h: 0.95, tone: "bad", icon: "🚫",
-    zh: "臺北的獎、或高雄的住宿大獎 → 一律不核銷。",
-    en: "Taipei prizes and Kaohsiung room stays are never redeemed at the counter." });
+    zh: "臺北的獎、或任何住宿獎 → 一律不核銷。",
+    en: "Taipei prizes and any room-stay prize are never redeemed at the counter." });
 }
 
 // ══════════════════════════════════════════════════════════════
 // 9-11 · 常見問題（拆三頁，避免卡片壓到頁尾）
 // ══════════════════════════════════════════════════════════════
 {
-  const s = slide("六、常見問題與標準回答（1/3）", "FAQ & Suggested Replies (1 of 3)");
+  const s = slide("七、常見問題與標準回答（1/3）", "FAQ & Suggested Replies (1 of 3)");
   qa(s, { y: 1.22, h: 1.36,
     zh: "我沒有收到優惠券？", en: "I didn't receive my coupon.",
     azh: "請打開高雄洲際酒店的 LINE 對話往上找，優惠券是以訊息形式發送的。若真的找不到，我幫您回報，會有同仁協助處理。",
@@ -353,25 +392,25 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     aen: "Each coupon can only be claimed once. If you're sure you haven't claimed it, I'll report it for verification." });
   qa(s, { y: 3.90, h: 1.18,
     zh: "我中獎了，怎麼都沒有券？", en: "I won a prize, but there's no coupon.",
-    azh: "部分獎項（臺北的全部獎項，以及高雄的兩項住宿大獎）由飯店同仁直接與您聯繫安排，所以不會發送優惠券。只要您已留下聯絡資料，我們會盡快與您聯繫。",
-    aen: "Some prizes — all Taipei prizes and two Kaohsiung room stays — are arranged directly by our colleagues, so no coupon is issued. We'll be in touch shortly." });
+    azh: "住宿類與臺北的獎項由飯店同仁直接與您聯繫安排，所以不會發送優惠券。若是其他獎品卻沒收到券，我幫您回報，同仁會協助處理。",
+    aen: "Room stays and Taipei prizes are arranged directly by our colleagues, so no coupon is issued. For any other prize, I'll report it and a colleague will assist." });
 }
 {
-  const s = slide("六、常見問題與標準回答（2/3）", "FAQ & Suggested Replies (2 of 3)");
+  const s = slide("七、常見問題與標準回答（2/3）", "FAQ & Suggested Replies (2 of 3)");
   qa(s, { y: 1.3, h: 1.3,
     zh: "我還沒留聯絡資料，要怎麼補？", en: "I haven't submitted my contact details yet.",
     azh: "請再打開一次活動頁面，系統會自動提醒您填寫。",
     aen: "Please reopen the campaign page — the system will prompt you again automatically." });
   qa(s, { y: 2.75, h: 1.3,
-    zh: "為什麼我抽到「銘謝惠顧」？", en: "Why did I get \"no prize this time\"?",
-    azh: "該等級的獎品目前已全部送出。您的洲遊幣沒有被扣除，可以改抽其他等級。",
-    aen: "All prizes at that tier have been given out. Your InterCoins were not deducted — you're welcome to try another tier." });
-  callout(s, { x: 0.55, y: 4.35, w: 8.9, h: 0.7, tone: "ok", icon: "💬",
-    zh: "「洲遊幣沒有被扣除」這句一定要講 —— 客人最在意的是有沒有白花。",
-    en: "Always mention that no coins were deducted — that is the guest's main concern." });
+    zh: "我抽到「銘謝惠顧」，洲遊幣還被扣掉了？", en: "I got nothing, and my coins were still deducted?",
+    azh: "抽獎每一次都會扣除洲遊幣，沒有中獎也一樣。建議您改抽三等獎，目前三等獎一定會中獎。",
+    aen: "Coins are deducted on every spin, whether or not a prize is won. We suggest trying the Third Prize tier — it currently always awards a prize." });
+  callout(s, { x: 0.55, y: 4.35, w: 8.9, h: 0.7, tone: "warn", icon: "💬",
+    zh: "不要說「不會扣」——  現在確實會扣。請直接引導客人改抽三等獎。",
+    en: "Never say coins are not deducted — they are. Redirect the guest to the Third Prize tier instead." });
 }
 {
-  const s = slide("六、常見問題與標準回答（3/3）", "FAQ & Suggested Replies (3 of 3)");
+  const s = slide("七、常見問題與標準回答（3/3）", "FAQ & Suggested Replies (3 of 3)");
   qa(s, { y: 1.3, h: 1.3,
     zh: "可以指定要抽哪個獎嗎？中獎率多少？", en: "Can I choose my prize? What are the odds?",
     azh: "抽獎結果由系統隨機產生，無法指定。詳細規則請參考活動頁面的「活動規則」。",
@@ -389,7 +428,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
 // 11 · 不可以說的事
 // ══════════════════════════════════════════════════════════════
 {
-  const s = slide("七、不可以對客人說的事", "What Not to Disclose to Guests");
+  const s = slide("八、不可以對客人說的事", "What Not to Disclose to Guests");
   const rows = [
     ["各獎項的中獎機率", "Prize win probabilities", "屬內部設定，公開會引發爭議與質疑"],
     ["每個獎品還剩幾份／已發出幾份", "Remaining or issued prize quantities", "同上，也可能被人為衝量"],
@@ -414,7 +453,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
 // 12 · 回報
 // ══════════════════════════════════════════════════════════════
 {
-  const s = slide("八、什麼狀況要往上回報", "When to Escalate");
+  const s = slide("九、什麼狀況要往上回報", "When to Escalate");
   const items = [
     ["客人說沒收到券，且在 LINE 對話中確實找不到", "Guest reports a missing coupon and it is genuinely not in their LINE chat"],
     ["客人的兌換碼查不到，或狀態異常", "A redemption code cannot be found, or its status looks wrong"],
@@ -446,9 +485,9 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
 
   const cards = [
     ["📩", "有優惠券", "Coupon Issued", "券自動進客人 LINE\n出示兌換碼 → 櫃檯核銷", "Coupon in LINE → redeem at counter", KH_BG, KH_FG],
-    ["📞", "沒有券", "Follow-Up", "臺北全部＋高雄兩項住宿大獎\n該館同仁主動聯繫，不核銷", "Taipei + 2 KH room prizes — never redeem", TPE_BG, TPE_FG],
-    ["🚫", "絕不能說", "Never Disclose", "中獎機率 · 剩餘數量\n其他客人的資料", "Odds · stock · other guests' data", BAD_BG, BAD],
-    ["🙋", "不確定就轉單", "When Unsure", "不要自行承諾兌換方式或日期\n一切以活動頁公告為準", "Escalate — never promise terms", OK_BG, OK],
+    ["📞", "只有兌換碼", "Code Only", "臺北或住宿 → 不核銷，等聯繫\n其餘高雄的獎 → 受理，回報主管", "Taipei / room stay → no. Others → accept & report", TPE_BG, TPE_FG],
+    ["🪙", "沒中獎也扣幣", "Coins Always Deducted", "每抽一次都扣，沒中獎也扣\n請引導客人改抽三等獎", "Every spin costs coins — redirect to Third Prize", WARN_BG, WARN],
+    ["🚫", "絕不能說", "Never Disclose", "中獎機率 · 剩餘數量 · 其他客人的資料\n不確定就轉給主管，不要自行承諾", "Odds · stock · other guests' data — escalate if unsure", BAD_BG, BAD],
   ];
   cards.forEach(([icon, zh, en, dzh, den, bg, fg], i) => {
     const x = 0.6 + (i % 2) * 4.45, y = 1.42 + Math.floor(i / 2) * 1.78;
