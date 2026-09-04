@@ -1103,11 +1103,22 @@ async function initLiff(){
    用途：在真實 LINE App 裡驗證「中獎後跳轉回高雄洲際 OA」實際會跳到哪。
    純前端演示 —— 不呼叫任何 API、不建立中獎紀錄、不扣洲遊幣、不扣獎品庫存。
    獎品名稱刻意標【測試】，客人萬一誤入也不會以為自己中獎。
-   開啟方式：在 LIFF 網址後面加 ?demo=win */
+   開啟方式：在 LIFF 網址後面加 ?demo=win（中實體小物）或 ?demo=consol（中 85 折） */
+const DEMO_CASES = {
+  // 中實體小物（三等獎，目前 50% 會是這兩樣之一）
+  win:    { prize:'【測試】高雄洲際酒店 洲賀熊',              tier:1, tierLabel:'三等獎' },
+  // 中安慰獎（目前最常見的結果，二等／一等更是 100%）
+  consol: { prize:'【測試】高雄洲際酒店 餐飲 85 折優惠禮遇',  tier:3, tierLabel:'二等獎' },
+};
+
 function maybeDemoWin(){
-  let on=false;
-  try{ on = /[?&]demo=win(?:&|$)/.test(location.search); }catch(e){ return false; }
-  if(!on) return false;
+  let which = null;
+  try{
+    const m = /[?&]demo=(win|consol)(?:&|$)/.exec(location.search);
+    which = m && m[1];
+  }catch(e){ return false; }
+  if(!which) return false;
+  const demo = DEMO_CASES[which];
   const gate=$('#access-gate'); if(gate) gate.hidden=true;
   const intro=$('#intro'); if(intro) intro.hidden=true;
   const app=$('#app'); if(app) app.hidden=false;
@@ -1117,8 +1128,7 @@ function maybeDemoWin(){
   //    「Cannot access 'X' before initialization」，而且錯誤被 async boot 吞掉，
   //    畫面只是靜靜地不出現彈窗，非常難查。
   setTimeout(() => showWin({
-    prize:'【測試】高雄洲際酒店 明信片組',
-    tier:1, tierLabel:'三等獎',
+    ...demo,
     code:'IC-TEST-0000', coin:0, claimMode:'coupon', pushed:true,
   }), 0);
   return true;

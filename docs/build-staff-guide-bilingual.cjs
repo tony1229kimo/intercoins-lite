@@ -235,8 +235,8 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
   });
 
   callout(s, { x: 0.55, y: 4.5, w: 8.9, h: 0.62, tone: "bad", icon: "🪙",
-    zh: "每抽一次都會扣洲遊幣，沒有中獎也一樣扣。這是客人最常抱怨的一點。",
-    en: "Coins are deducted on every spin, including when nothing is won. This is the most common complaint." });
+    zh: "每次抽獎都會扣洲遊幣，但一定會中獎 —— 最少也會拿到餐飲 85 折優惠。",
+    en: "Every spin costs coins, and every spin wins something — at minimum a 15% dining discount." });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -402,12 +402,12 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
     azh: "請再打開一次活動頁面，系統會自動提醒您填寫。",
     aen: "Please reopen the campaign page — the system will prompt you again automatically." });
   qa(s, { y: 2.75, h: 1.3,
-    zh: "我抽到「銘謝惠顧」，洲遊幣還被扣掉了？", en: "I got nothing, and my coins were still deducted?",
-    azh: "抽獎每一次都會扣除洲遊幣，沒有中獎也一樣。建議您改抽三等獎，目前三等獎一定會中獎。",
-    aen: "Coins are deducted on every spin, whether or not a prize is won. We suggest trying the Third Prize tier — it currently always awards a prize." });
-  callout(s, { x: 0.55, y: 4.35, w: 8.9, h: 0.7, tone: "warn", icon: "💬",
-    zh: "不要說「不會扣」——  現在確實會扣。請直接引導客人改抽三等獎。",
-    en: "Never say coins are not deducted — they are. Redirect the guest to the Third Prize tier instead." });
+    zh: "為什麼我一直抽到餐飲 85 折？", en: "Why do I keep getting the 15% dining discount?",
+    azh: "本活動每次抽獎都一定會中獎，餐飲 85 折是保底獎項，其他獎品則有名額限制，發完為止。",
+    aen: "Every spin wins something. The 15% dining discount is the guaranteed baseline; other prizes are limited and awarded while stocks last." });
+  callout(s, { x: 0.55, y: 4.35, w: 8.9, h: 0.7, tone: "ok", icon: "💬",
+    zh: "重點講「每抽必中，最少也有 85 折」—— 不要說「沒中獎」，現在沒有這種結果。",
+    en: "Emphasise that every spin wins something. There is no longer a \"no prize\" outcome." });
 }
 {
   const s = slide("七、常見問題與標準回答（3/3）", "FAQ & Suggested Replies (3 of 3)");
@@ -486,7 +486,7 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
   const cards = [
     ["📩", "有優惠券", "Coupon Issued", "券自動進客人 LINE\n出示兌換碼 → 櫃檯核銷", "Coupon in LINE → redeem at counter", KH_BG, KH_FG],
     ["📞", "只有兌換碼", "Code Only", "臺北或住宿 → 不核銷，等聯繫\n其餘高雄的獎 → 受理，回報主管", "Taipei / room stay → no. Others → accept & report", TPE_BG, TPE_FG],
-    ["🪙", "沒中獎也扣幣", "Coins Always Deducted", "每抽一次都扣，沒中獎也扣\n請引導客人改抽三等獎", "Every spin costs coins — redirect to Third Prize", WARN_BG, WARN],
+    ["🎁", "每抽必中", "Every Spin Wins", "每次都扣洲遊幣，但一定中獎\n最少也會拿到餐飲 85 折", "Coins deducted, but every spin wins — min. 15% dining discount", OK_BG, OK],
     ["🚫", "絕不能說", "Never Disclose", "中獎機率 · 剩餘數量 · 其他客人的資料\n不確定就轉給主管，不要自行承諾", "Odds · stock · other guests' data — escalate if unsure", BAD_BG, BAD],
   ];
   cards.forEach(([icon, zh, en, dzh, den, bg, fg], i) => {
