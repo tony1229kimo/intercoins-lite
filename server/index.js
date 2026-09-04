@@ -70,9 +70,12 @@ app.get("/api/health", async (req, res) => {
     };
     if (db === "ok") {
       const { rows } = await query(
+        // 條件要跟 /spin 的抽獎池一致 —— 安慰獎 visible=false 但抽得到。
+        // quota = 0 代表不限量，加總沒有意義，所以另外用 unlimited 計數。
         `SELECT hotel, claim_mode, count(*)::int AS prizes,
-                sum(quota)::int AS quota, sum(issued)::int AS issued
-           FROM prizes WHERE active AND visible
+                sum(quota)::int AS quota, sum(issued)::int AS issued,
+                (count(*) FILTER (WHERE quota = 0))::int AS unlimited
+           FROM prizes WHERE active AND (visible OR is_consolation)
           GROUP BY hotel, claim_mode ORDER BY hotel`,
       );
       out.prize_pool = rows;
