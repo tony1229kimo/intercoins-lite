@@ -289,11 +289,16 @@ router.post("/spin", liffAuth, async (req, res) => {
           FOR UPDATE`,
         [tier],
       );
-      // 該等級的獎全部發完 → 不是錯誤，是「銘謝惠顧」（Tony 2026-09-01）。
-      // 刻意【不扣幣】：獎都沒了還收客人的洲遊幣，客訴與法遵風險都不划算。
-      // 要改成扣幣的話，把下面的 EMPTY_TIER_COST 改成 cost 即可。
-      const EMPTY_TIER_COST = 0;
-      if (!pool.length) return { soldOut: true, cost: EMPTY_TIER_COST, balance: player.balance };
+      // 該等級的獎全部發完 → 不是錯誤，是「銘謝惠顧」。
+      //
+      // 【要扣幣】（Tony 2026-09-04：公司決定要有銘謝惠顧機制，前台會對客人說明）。
+      // 原本刻意不扣，理由是「獎都沒了還收幣」客訴風險高；
+      // 現在改成扣，是為了讓一等／二等留在畫面上當目標時仍有成本，
+      // 而三等獎維持 100% 必中（洲賀熊 / 旅行外幣收納錢包），客人一定拿得到東西。
+      if (!pool.length) {
+        await addCoins(client, req.lineUserId, -cost, "spin_miss", `tier${tier}_soldout`);
+        return { soldOut: true, cost, balance: player.balance - cost };
+      }
 
       // 對 100 抽：權重總和不足 100 的缺口就是「這次沒中獎」。
       //

@@ -1409,12 +1409,12 @@ function showWin(r){
     wt.style.setProperty('--tag-bg','#8C8578');
     $('#modal .code').innerHTML='本次沒有中獎'
       + `<span style="display:block;margin-top:8px;font-size:12px;color:#686869;letter-spacing:0">`
-      // 兩種銘謝惠顧扣幣與否不同，一定要據實講：
-      //   missed  = 有獎但這次沒抽中 → 已扣幣
-      //   soldOut = 該等級一件都沒有 → 不扣幣（正常情況下等級已被鎖住，選不到）
-      + (r.missed
+      // 兩種銘謝惠顧現在都會扣幣（Tony 2026-09-04）。
+      // 一律看 costCharged 的實際值來寫，不要寫死 —— 之後若又改回不扣，文案會自己跟上。
+      + (r.missed ? '' : '本等級獎項已全數送出。')
+      + (r.costCharged
           ? `已扣除 <span class="em">${r.costCharged} 枚洲遊幣</span>。`
-          : '本等級獎項已全數送出，你的洲遊幣<span class="em">沒有被扣除</span>。')
+          : '你的洲遊幣<span class="em">沒有被扣除</span>。')
       + (r.tier === 1
           ? '<br>歡迎再試一次，或去完成任務賺更多洲遊幣。'
           : '<br>建議改抽<span class="em">三等獎</span>，獎品種類與數量都最多。')

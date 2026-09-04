@@ -44,7 +44,7 @@ p.title = "洲遊幣 Lite · 櫃檯應對指引";
     x: 8.05, y: 0.32, w: 1.45, h: 0.36, rectRadius: 0.05,
     fill: { color: WARN_BG }, line: { color: WARN, width: 0.75 },
   });
-  s.addText("2026-09-02 更新", {
+  s.addText("2026-09-04 更新", {
     x: 8.05, y: 0.32, w: 1.45, h: 0.36,
     fontFace: FONT, fontSize: 9.5, bold: true, color: WARN, align: "center", valign: "middle",
   });
@@ -92,16 +92,28 @@ p.title = "洲遊幣 Lite · 櫃檯應對指引";
     x: 5.32, y: 2.3, w: 4, h: 1.85, fontFace: FONT, fontSize: 11.5, color: INK, lineSpacing: 17,
   });
 
+  // 2026-09-04 新規則：沒中獎也扣幣 —— 櫃檯最容易被質問的一點
+  s.addShape(p.ShapeType.roundRect, {
+    x: 0.5, y: 4.34, w: 9, h: 0.42, rectRadius: 0.06,
+    fill: { color: WARN_BG }, line: { color: WARN, width: 1 },
+  });
+  s.addText([
+    { text: "9/4 起：", options: { bold: true } },
+    { text: "抽獎每次都會扣洲遊幣，沒中獎也一樣。三等獎目前保證中獎，客人抱怨時請引導改抽三等獎。" },
+  ], {
+    x: 0.72, y: 4.34, w: 8.6, h: 0.42, fontFace: FONT, fontSize: 11.5, color: WARN, valign: "middle",
+  });
+
   // 一句話口訣
   s.addShape(p.ShapeType.roundRect, {
-    x: 0.5, y: 4.42, w: 9, h: 0.62, rectRadius: 0.07,
+    x: 0.5, y: 4.86, w: 9, h: 0.46, rectRadius: 0.07,
     fill: { color: TINT }, line: { color: GOLD, width: 1 },
   });
   s.addText([
     { text: "一句話記住：", options: { bold: true, color: GOLD } },
     { text: "看到「臺北」或「住宿」→ 不核銷，等專人聯繫。其餘高雄的實體小物與餐飲券 → 受理，回報主管。" },
   ], {
-    x: 0.72, y: 4.42, w: 8.6, h: 0.62, fontFace: FONT, fontSize: 12.5, color: INK, valign: "middle",
+    x: 0.72, y: 4.86, w: 8.6, h: 0.46, fontFace: FONT, fontSize: 11.5, color: INK, valign: "middle",
   });
 
   s.addText("洲遊幣 Lite · 櫃檯應對指引 · 內部使用", {
@@ -123,10 +135,10 @@ p.title = "洲遊幣 Lite · 櫃檯應對指引";
   s.addShape(p.ShapeType.rect, { x: 0.5, y: 0.84, w: 0.55, h: 0.045, fill: { color: GOLD } });
 
   const qa = [
-    ["我抽到「銘謝惠顧」，是不是壞掉了？",
-     "沒有壞掉。該等級的獎品已經全數送出了。您的洲遊幣沒有被扣除，可以改抽三等獎。"],
+    ["我抽到「銘謝惠顧」，洲遊幣還被扣掉了？",
+     "抽獎每一次都會扣除洲遊幣，沒有中獎也一樣。目前三等獎一定會中獎，建議您改抽三等獎。"],
     ["為什麼一等獎、二等獎都抽不到東西？",
-     "這兩個等級的獎品已經全部送完。三等獎還有獎品，歡迎改抽三等獎。"],
+     "這兩個等級的獎品已經全部送完，投進去會是銘謝惠顧、洲遊幣一樣會扣。三等獎目前保證中獎，請改抽三等獎。"],
     ["為什麼現在抽不到「洲遊幣」了？",
      "活動調整過獎項配置，目前轉盤上的獎品以實體好禮為主。"],
     ["我中了住宿獎，什麼時候會有人聯絡我？",
@@ -167,5 +179,5 @@ p.title = "洲遊幣 Lite · 櫃檯應對指引";
   });
 }
 
-const out = path.join(__dirname, "櫃檯應對指引_2026-09-02.pptx");
+const out = path.join(__dirname, "櫃檯應對指引_2026-09-04.pptx");
 p.writeFile({ fileName: out }).then(() => console.log("✅ 2 張投影片 →", path.basename(out)));

@@ -42,7 +42,8 @@ function run(sql, params = []) {
   if (q.includes("COUNT(*)::int AS n FROM draws")) {
     return { rows: [{ n: DB.draws.filter((d) => d.coin_reward === 0).length }] };
   }
-  if (q.startsWith("SELECT * FROM prizes")) return { rows: [{ ...DB.prize }] };
+  // DB.prize = null 代表「這個等級一件獎品都沒有」（池子是空的）
+  if (q.startsWith("SELECT * FROM prizes")) return { rows: DB.prize ? [{ ...DB.prize }] : [] };
   if (q.startsWith("UPDATE prizes SET issued")) {
     DB.prize.issued++;
     return { rowCount: 1, rows: [{ issued: DB.prize.issued }] };
