@@ -1175,6 +1175,9 @@ function pickCoins(coins){
 // 依目前選擇刷新控制區：卡片選中態、主 CTA 標籤與枚數、可負擔差額提示
 function refreshDraw(){
   const coins=COST[selTier];                       // 目前等級所需枚數＝投入枚數
+  // ⚠️ 沒庫存的等級【刻意不鎖】（Tony 2026-09-02）——
+  //    一等／二等要留在畫面上當目標，客人才有動力存洲遊幣。
+  //    抽到空的等級走的是 soldOut 路徑，本來就不扣幣，所以不會傷到客人。
   $$('.tier-card').forEach(c=>c.setAttribute('aria-checked', +c.dataset.coins===coins ? 'true':'false'));
   const afford=S.balance>=coins;
   const capped=atWinCap();
@@ -1406,8 +1409,12 @@ function showWin(r){
     wt.style.setProperty('--tag-bg','#8C8578');
     $('#modal .code').innerHTML='本次沒有中獎'
       + `<span style="display:block;margin-top:8px;font-size:12px;color:#686869;letter-spacing:0">`
-      + '你的洲遊幣<span class="em">沒有被扣除</span>。'
-      // 二等／一等沒中就把人導去三等獎 —— 那邊獎品最多（Tony 2026-09-02）。
+      // 兩種銘謝惠顧扣幣與否不同，一定要據實講：
+      //   missed  = 有獎但這次沒抽中 → 已扣幣
+      //   soldOut = 該等級一件都沒有 → 不扣幣（正常情況下等級已被鎖住，選不到）
+      + (r.missed
+          ? `已扣除 <span class="em">${r.costCharged} 枚洲遊幣</span>。`
+          : '本等級獎項已全數送出，你的洲遊幣<span class="em">沒有被扣除</span>。')
       + (r.tier === 1
           ? '<br>歡迎再試一次，或去完成任務賺更多洲遊幣。'
           : '<br>建議改抽<span class="em">三等獎</span>，獎品種類與數量都最多。')

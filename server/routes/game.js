@@ -295,15 +295,19 @@ router.post("/spin", liffAuth, async (req, res) => {
       const EMPTY_TIER_COST = 0;
       if (!pool.length) return { soldOut: true, cost: EMPTY_TIER_COST, balance: player.balance };
 
-      // 對 100 抽：權重總和不足 100 的缺口就是「這次沒中獎」（Tony 2026-09-02）。
+      // 對 100 抽：權重總和不足 100 的缺口就是「這次沒中獎」。
       //
-      // ⚠️ 跟「獎發完了」一樣【不扣幣】（Tony 拍板）。
-      //    代價要知道：不扣幣＝客人可以免費重抽到中獎為止，
-      //    所以這個機率【不會】減緩獎品消耗，只是讓他多轉幾次。
-      //    真正限制發獎速度的是 quota，不是 weight。
-      //    用途是「把人從庫存少的等級導去庫存多的等級」，不是節流。
+      // 【要扣幣】（Tony 2026-09-02 第二版決定）——
+      // 不扣的話客人可以免費重抽到中獎為止，機率設定形同虛設。
+      //
+      // ⚠️ 與上面「該等級一件獎品都沒有」的 soldOut 是兩回事，那個【不扣】：
+      //    池子是空的代表客人本來就不可能中，收他的幣沒有道理。
+      //    前端也會把沒庫存的等級鎖起來，正常情況下客人根本選不到那一級。
       const prize = weightedPick(pool, { outOf: 100 });
-      if (!prize) return { soldOut: true, cost: EMPTY_TIER_COST, balance: player.balance };
+      if (!prize) {
+        await addCoins(client, req.lineUserId, -cost, "spin_miss", `tier${tier}`);
+        return { missed: true, cost, balance: player.balance - cost };
+      }
 
       const upd = await client.query(
         `UPDATE prizes SET issued = issued + 1, updated_at = now()
@@ -353,6 +357,23 @@ router.post("/spin", liffAuth, async (req, res) => {
       tierLabel: TIER_LABEL[tier],
       balance: outcome.balance,
       costCharged: 0,
+    });
+  }
+
+  // 機率性沒中獎（權重缺口）→ 銘謝惠顧，而且【有扣幣】。
+  if (outcome.missed) {
+    return res.json({
+      ok: true,
+      soldOut: true,          // 前端沿用同一套「銘謝惠顧」畫面
+      missed: true,           // 但文案要講清楚扣了幾枚
+      prizeId: null,
+      prize: "銘謝惠顧",
+      tier,
+      tierLabel: TIER_LABEL[tier],
+      code: null,
+      coin: 0,
+      balance: outcome.balance,
+      costCharged: outcome.cost,
     });
   }
 
