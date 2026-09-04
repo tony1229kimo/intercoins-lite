@@ -28,9 +28,27 @@ export function commentSpans(src, { mode: startMode = "html" } = {}) {
   let mode = startMode;
   let prevSig = "";
 
+  // Template literals nest: `a ${ b ? `c` : d } e`. The stack tracks which one
+  // we are inside, and whether we are in its text or in a ${...} expression.
+  // Expressions are ordinary code and can hold comments, so they must be walked
+  // by the main loop rather than skipped over -- a comment written inside one
+  // used to be invisible here, which meant it was never stripped either.
+  const stack = [];
+  const top = () => stack[stack.length - 1];
+
   const push = (kind, start, end) => spans.push({ kind, start, end, text: src.slice(start, end) });
 
   while (i < src.length) {
+    // Inside the text part of a template literal: no comments, only the ways out.
+    if (top()?.k === "tmpl") {
+      const c = src[i];
+      if (c === "\\") { i += 2; continue; }
+      if (c === "`") { stack.pop(); prevSig = "`"; i++; continue; }
+      if (c === "$" && src[i + 1] === "{") { stack.push({ k: "expr", depth: 1 }); i += 2; continue; }
+      i++;
+      continue;
+    }
+
     if (mode === "html") {
       if (src.startsWith("<!--", i)) {
         const end = src.indexOf("-->", i + 4);
@@ -79,10 +97,26 @@ export function commentSpans(src, { mode: startMode = "html" } = {}) {
       continue;
     }
 
-    if (c === '"' || c === "'" || c === "`") {
+    if (c === "`") {
+      stack.push({ k: "tmpl" });
+      prevSig = "`";
+      i++;
+      continue;
+    }
+
+    if (c === '"' || c === "'") {
       i = skipString(src, i, c);
       prevSig = c;
       continue;
+    }
+
+    // Track the braces of a ${...} so we know which } ends it.
+    if (top()?.k === "expr") {
+      if (c === "{") top().depth++;
+      else if (c === "}") {
+        top().depth--;
+        if (top().depth === 0) { stack.pop(); prevSig = "}"; i++; continue; }
+      }
     }
 
     if (mode === "js" && c === "/" && !DIVIDES.test(prevSig)) {
@@ -97,24 +131,14 @@ export function commentSpans(src, { mode: startMode = "html" } = {}) {
   return spans;
 }
 
+/** Skip a ' or " string. Template literals are handled by the main loop. */
 function skipString(src, i, quote) {
   i++;
   while (i < src.length) {
     const c = src[i];
     if (c === "\\") { i += 2; continue; }
-    if (quote === "`" && c === "$" && src[i + 1] === "{") {
-      let depth = 1;
-      i += 2;
-      while (i < src.length && depth > 0) {
-        const d = src[i];
-        if (d === "{") depth++;
-        else if (d === "}") depth--;
-        else if (d === '"' || d === "'" || d === "`") { i = skipString(src, i, d); continue; }
-        i++;
-      }
-      continue;
-    }
     if (c === quote) return i + 1;
+    if (c === "\n") return i;            // an unterminated quote ends at the line
     i++;
   }
   return i;
@@ -135,10 +159,15 @@ function skipRegex(src, i) {
   return i;
 }
 
-/** `src` with every comment removed. Line breaks inside a comment are kept. */
-export function stripComments(src) {
+/**
+ * `src` with every comment removed. Line breaks inside a comment are kept.
+ *
+ * Pass the same mode you would pass commentSpans: "html" (default) for a page
+ * that inlines its CSS and JS, "css" or "js" for a standalone file.
+ */
+export function stripComments(src, opts) {
   let out = src;
-  const spans = commentSpans(src);
+  const spans = commentSpans(src, opts);
   for (let n = spans.length - 1; n >= 0; n--) {
     const s = spans[n];
     // Keep a newline where a multi-line comment was, so a "//" comment cannot

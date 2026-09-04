@@ -1,10 +1,13 @@
 /**
- * 安慰獎（85 折餐飲優惠）取代「銘謝惠顧」。Tony 2026-09-04。
+ * The consolation prize replaces the old empty-handed result.
  *
- * 承諾很簡單：**只要池子裡有安慰獎，客人就不可能空手而回。**
- * 這條承諾要靠測試守住，因為它有兩個都很難用眼睛看出來的破口：
- *   1. 權重加起來不到 100 時，缺口原本會變成銘謝惠顧
- *   2. 其他獎品發完後，池子只剩安慰獎，權重也不到 100
+ * The promise is simple: while a consolation prize is in the pool, nobody can
+ * leave with nothing. It needs a test to hold it, because it has two failure
+ * modes that are very hard to see by reading:
+ *   1. when the weights do not fill the denominator, the shortfall used to be an
+ *      empty-handed result
+ *   2. once the other prizes have gone, the pool holds only the consolation one,
+ *      whose weight also does not fill the denominator
  */
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -14,7 +17,7 @@ let app;
 before(async () => { app = await startApp(); });
 after(() => app?.close());
 
-/** 讓假 DB 回傳一整池獎品（harness 預設只有一件）。 */
+/** Make the fake database return a whole pool; the harness returns a single prize by default. */
 function setPool(rows) {
   DB.pool = rows;
 }

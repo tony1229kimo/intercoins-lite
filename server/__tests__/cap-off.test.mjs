@@ -1,18 +1,22 @@
 /**
- * 每人實體獎上限 —— **預設（未設環境變數）** 的行為：不擋。
+ * Per-person physical-prize limit: the DEFAULT behaviour, with no environment
+ * variable set, is not to block.
  *
- * Tony 2026-09-02 決定關掉上限（洲遊幣設 0% 之後退幣循環沒了，
- * 每人 8 枚幣自然封頂，三等獎還有 78 個名額）。
+ * The limit was switched off on 2026-09-02. The refund loop it was written for no
+ * longer exists, and the fixed number of coins each person can earn caps
+ * consumption on its own.
  *
- * 這個檔案守住兩件事：
- *   1. 沒設環境變數 = 不擋（預設值不能哪天被人改回 2 卻沒人發現）
- *   2. 設 0 這個逃生門真的有效 —— 上限設錯把客人全鎖住時要靠它救
+ * This file holds two things still:
+ *   1. unset means no limit, so the default cannot quietly be changed back
+ *   2. setting 0 really is an escape hatch -- it is what rescues the campaign if
+ *      the limit is ever set wrong and locks guests out
  *
- * ⚠️ 常數是 module load 時讀的 → env 一定要在 startApp() 之前處理好，
- *    也因此不能跟 cap.test.mjs 放同一個檔（同一個 process 只會 load 一次）。
+ * The constant is read at module load, so the environment has to be settled
+ * before startApp(). That is also why this cannot share a file with
+ * cap.test.mjs: one process loads the module once.
  */
-// 不設 env —— 這裡測的就是【預設值】。Tony 2026-09-02 把預設改成不限，
-// 所以「沒設環境變數」必須等於「不擋」，這是這個檔案要守住的事。
+// No environment variable on purpose: the DEFAULT is what is under test here.
+// The default is no limit, so "unset" has to mean "do not block".
 delete process.env.MAX_PHYSICAL_WINS;
 
 import { test, before, after } from "node:test";

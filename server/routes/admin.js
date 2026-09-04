@@ -304,9 +304,11 @@ router.get("/winners.csv", async (req, res) => {
 });
 
 /**
- * 待聯繫名單 —— claim_mode='contact' 的中獎紀錄。
- * ⚠️ 不是只有臺北：高雄的兩項住宿大獎（kh-5-1 / kh-5-2）也走這裡，
- *    所以一定要回傳 hotel，後台才分得出該由哪一館聯繫。
+ * Follow-up list: wins with claim_mode 'contact'.
+ *
+ * Not only Taipei -- the two Kaohsiung room prizes take this path as well, so
+ * the hotel has to come back with each row or the panel cannot tell which
+ * property should be making contact.
  */
 router.get("/contacts", async (req, res) => {
   await logAccess(req.adminUser, "contacts", req).catch(() => {});
@@ -328,7 +330,7 @@ router.get("/contacts", async (req, res) => {
   });
 });
 
-/** 補推播：推播失敗的中獎紀錄重送一次。 */
+/** Re-send: push a win again after the first attempt failed. */
 router.post("/draws/:id/repush", async (req, res) => {
   const { rows } = await query(
     `SELECT d.*, pr.spend_threshold, pr.expiry_note

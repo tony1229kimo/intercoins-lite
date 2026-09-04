@@ -1,11 +1,14 @@
 /**
- * weightedPick 的分母行為。
+ * What weightedPick draws against.
  *
- * 2026-09-02：行銷要「二等獎每個獎品 4%、其餘 80% 不中獎」。
- * 舊的 weightedPick 是對【權重總和】抽，所以 5 個各 4% 會被正規化成各 20% ——
- * 設定看起來對，實際效果完全不同，而且從外面看不出來。
+ * 2026-09-02: the requirement was for each prize in a tier to carry a few points
+ * and for the remainder of the denominator to be a losing draw. The old
+ * weightedPick drew against the SUM of the weights, so five equal prizes were
+ * normalised to a fifth each -- the configuration looked right and behaved
+ * completely differently, with nothing visible from the outside to say so.
  *
- * 現在 outOf:100 是對固定分母抽，缺口才是真正的「沒中獎」。
+ * With outOf the draw is against a fixed denominator, so the shortfall is a
+ * genuine losing outcome.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +16,7 @@ import { weightedPick } from "../lib/random.js";
 
 const N = 200_000;
 
-/** 跑 N 次，回傳每個 id 的實際命中率（%），null 記成 __miss。 */
+/** Run N draws and report the share each id actually won, counting null as __miss. */
 function simulate(items, opts) {
   const hit = { __miss: 0 };
   for (let i = 0; i < N; i++) {

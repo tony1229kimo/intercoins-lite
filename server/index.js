@@ -7,9 +7,9 @@
  * 404s. One domain removes the problem.
  */
 import express from "express";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, extname, join, normalize, sep } from "node:path";
 
 import { ensureSchema, hasDb, query } from "./db.js";
 import { seedPrizes } from "./prizes.js";
@@ -108,9 +108,11 @@ app.get("/api/config.js", (_req, res) => {
   res.type("application/javascript").set("Cache-Control", "no-store");
   res.send(`window.IC_CONFIG=${JSON.stringify({
     liffId: process.env.LIFF_ID || "",
-    // 內部預覽用的密碼閘。沒設 PREVIEW_PASSWORD 就停用 ——
-    // 正式上線的門檻是 LINE 登入 + 加好友，本來就不靠這道閘。
-    // ⚠️ 不要把密碼寫死在 public/index.html：那是公開原始碼，按 F12 就看得到。
+    // Password gate for internal previews, disabled when the variable is unset.
+    // The real barrier on the live campaign is signing in with LINE and adding
+    // the account as a friend; this gate is not what protects anything.
+    // It comes from here because a password written into a public file is
+    // readable by anyone who opens the page source.
     previewPassword: process.env.PREVIEW_PASSWORD || "",
     addFriendUrl: process.env.LINE_ADD_FRIEND_URL || "https://lin.ee/uKzkNI9",
     serverMode: hasDb,
@@ -127,31 +129,58 @@ app.use("/api", gameRoutes);
 app.use("/api", (_req, res) => res.status(404).json({ error: "not_found" }));
 
 /**
- * Every public/*.html file is served with its comments removed.
+ * Files we serve out of public/ are text a guest can read in full: "view
+ * source" hands over the whole thing. So every strippable file is served with
+ * its comments removed -- the source on disk keeps its documentation, and the
+ * browser never receives a word of it.
  *
- * Those files reach the browser byte for byte, and guests have read them: what
- * they found looked, fairly, like something to be suspicious of. The source keeps
- * its documentation and the browser receives none of it.
+ * This has to be closed by default rather than by a list of filenames. An
+ * earlier version named index.html and the admin pages explicitly and let
+ * everything else fall through to express.static, which would have served a
+ * newly added page verbatim, comments and all. Now anything matching
+ * STRIPPABLE is served from here or not at all.
  */
-const PAGES = new Map();
+const STRIPPABLE = /\.(html|css|js|mjs)$/i;
+const CACHE = new Map();
 
-function page(name) {
-  if (!PAGES.has(name)) {
-    PAGES.set(name, stripComments(readFileSync(join(PUBLIC_DIR, name), "utf8")));
+function modeFor(rel) {
+  if (/\.css$/i.test(rel)) return "css";
+  if (/\.m?js$/i.test(rel)) return "js";
+  return "html";
+}
+
+function stripped(rel) {
+  if (!CACHE.has(rel)) {
+    const text = readFileSync(join(PUBLIC_DIR, rel), "utf8");
+    CACHE.set(rel, stripComments(text, { mode: modeFor(rel) }));
   }
-  return PAGES.get(name);
+  return CACHE.get(rel);
 }
 
 function sendPage(res, name) {
-  res.type("html").set("Cache-Control", "no-store").send(page(name));
+  res.type("html").set("Cache-Control", "no-store").send(stripped(name));
 }
 
-// Requests that name a .html file directly must not reach express.static, or they would bypass the stripping above.
-app.get(/\.html$/i, (req, res, next) => {
-  const name = req.path.slice(req.path.lastIndexOf("/") + 1);
-  if (name === "index.html") return sendPage(res, "index.html");
+app.get(STRIPPABLE, (req, res, next) => {
+  // Resolve inside PUBLIC_DIR, so no request can walk out of it. normalize()
+  // returns backslashes on Windows, hence both separators below.
+  let rel;
+  try {
+    rel = normalize(decodeURIComponent(req.path)).replace(/^[\\/]+/, "");
+  } catch {
+    return res.sendStatus(400);          // malformed percent-encoding
+  }
+  const abs = join(PUBLIC_DIR, rel);
+  if (!abs.startsWith(PUBLIC_DIR + sep)) return res.sendStatus(404);
+
+  // The admin pages are never served by filename; they go through the gate below.
+  const name = rel.split(/[\\/]/).pop();
   if (name === "admin.html" || name === "admin-login.html") return res.redirect(302, "/admin");
-  next();
+
+  if (!existsSync(abs)) return next();
+  res.type(extname(abs))
+     .set("Cache-Control", name === "index.html" ? "no-store" : "public, max-age=3600")
+     .send(stripped(rel));
 });
 
 /**

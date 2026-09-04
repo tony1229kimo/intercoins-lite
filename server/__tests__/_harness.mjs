@@ -1,10 +1,11 @@
 /**
- * 測試用的假資料庫 + 把【真的】game.js router 掛起來。
+ * A fake database, with the REAL game.js router mounted on top of it.
  *
- * 這個 repo 沒有 DB 可以在本機跑，所以用 node:test 的 module mock 換掉 db.js / line.js /
- * liffAuth.js，其餘（路由、交易邏輯、上限判斷）都是真的程式碼。
+ * There is no database to run locally, so node:test's module mocking replaces
+ * db.js, line.js and liffAuth.js. Everything else -- the routes, the transaction
+ * logic, the limit checks -- is the real code.
  *
- * ⚠️ 需要 --experimental-test-module-mocks（見 package.json 的 test script）。
+ * Needs --experimental-test-module-mocks; see the test script in package.json.
  */
 import { mock } from "node:test";
 import { pathToFileURL } from "node:url";
@@ -14,12 +15,12 @@ import express from "express";
 const SERVER_DIR = path.resolve(import.meta.dirname, "..");
 const url = (rel) => pathToFileURL(path.join(SERVER_DIR, rel)).href;
 
-/** 每個測試檔自己一份，測試之間用 resetDB() 歸零。 */
+/** One per test file, reset between tests with resetDB(). */
 export const DB = {
   player: null,
   draws: [],
   prize: null,
-  pool: null,              // 設了就當成整個抽獎池（可含安慰獎）
+  pool: null,              // when set, this is the whole draw pool (a consolation prize may be in it)
   pushes: [],
 };
 
@@ -27,7 +28,7 @@ export function resetDB({ balance = 8 } = {}) {
   DB.player = { line_user_id: "U_test", display_name: "測試", picture_url: null, balance };
   DB.draws = [];
   DB.pushes = [];
-  DB.pool = null;          // 預設用單件的 DB.prize；要測整池就自己設 DB.pool
+  DB.pool = null;          // defaults to the single DB.prize; set DB.pool to test a whole pool
   DB.prize = {
     id: "kh-3-1", hotel: "KH", tier: 1, position: 0, name: "測試實體獎",
     claim_mode: "coupon", coupon_link: "https://example.invalid/x",
@@ -36,7 +37,7 @@ export function resetDB({ balance = 8 } = {}) {
   };
 }
 
-/** 只實作這些路由真正會下的查詢；沒對上的一律炸掉，避免測試默默通過。 */
+/** Only the queries these routes actually run are implemented. Anything else throws, so a test cannot pass quietly against a query nobody modelled. */
 function run(sql, params = []) {
   const q = sql.replace(/\s+/g, " ").trim();
   if (q.startsWith("INSERT INTO players")) return { rows: [DB.player] };
@@ -44,8 +45,9 @@ function run(sql, params = []) {
   if (q.includes("COUNT(*)::int AS n FROM draws")) {
     return { rows: [{ n: DB.draws.filter((d) => d.coin_reward === 0).length }] };
   }
-  // 抽獎池：DB.pool 有設就用它（可以放多件、含安慰獎），
-  // 否則退回單件的 DB.prize；DB.prize = null 代表這個等級一件都沒有。
+  // Draw pool: use DB.pool when it is set, which can hold several prizes
+  // including a consolation one; otherwise fall back to the single DB.prize.
+  // DB.prize = null means this tier holds nothing at all.
   if (q.startsWith("SELECT * FROM prizes")) {
     if (DB.pool) return { rows: DB.pool.map((x) => ({ ...x })) };
     return { rows: DB.prize ? [{ ...DB.prize }] : [] };
@@ -79,9 +81,9 @@ function run(sql, params = []) {
 }
 
 /**
- * 掛好 mock 後 import 真的 router 並起一個 server。
- * 一定要在 import game.js 之前設好 process.env.MAX_PHYSICAL_WINS ——
- * 那個常數是 module load 時讀的。
+ * Import the real router once the mocks are in place, and start a server.
+ * MAX_PHYSICAL_WINS has to be set before game.js is imported, because that
+ * constant is read when the module loads.
  */
 export async function startApp() {
   mock.module(url("db.js"), {

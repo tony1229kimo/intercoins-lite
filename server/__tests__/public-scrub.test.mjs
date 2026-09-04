@@ -35,8 +35,26 @@ import path from "node:path";
 import { commentSpans, stripComments, HAS_CJK } from "../lib/htmlComments.js";
 
 const PUBLIC_DIR = path.join(import.meta.dirname, "..", "..", "public");
-const FILES = readdirSync(PUBLIC_DIR).filter((f) => f.endsWith(".html"));
+
+/**
+ * Every text file we serve, found by walking rather than by naming files.
+ *
+ * Naming them is how a gap opens: a page added later would simply not be
+ * checked, and would not look any different from one that had been.
+ */
+function walk(dir, prefix = "") {
+  const out = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${e.name}` : e.name;
+    if (e.isDirectory()) out.push(...walk(path.join(dir, e.name), rel));
+    else if (/\.(html|css|js|mjs)$/i.test(e.name)) out.push(rel);
+  }
+  return out;
+}
+
+const FILES = walk(PUBLIC_DIR);
 const read = (f) => readFileSync(path.join(PUBLIC_DIR, f), "utf8");
+const modeOf = (f) => (/\.css$/i.test(f) ? "css" : /\.m?js$/i.test(f) ? "js" : "html");
 
 /** Banned in every file we serve. */
 const BANNED_ALL = [
@@ -101,7 +119,7 @@ for (const file of FILES) {
   }
 
   test(`${file} comments are English only`, () => {
-    const bad = commentSpans(src)
+    const bad = commentSpans(src, { mode: modeOf(file) })
       .filter((s) => HAS_CJK.test(s.text))
       .map((s) => `L${src.slice(0, s.start).split("\n").length}: ${s.text.replace(/\s+/g, " ").slice(0, 60)}`);
     assert.deepEqual(bad, [],
@@ -109,7 +127,8 @@ for (const file of FILES) {
   });
 
   test(`${file} has no comments left after stripping`, () => {
-    const left = commentSpans(stripComments(src));
+    const opts = { mode: modeOf(file) };
+    const left = commentSpans(stripComments(src, opts), opts);
     assert.equal(left.length, 0,
       `the stripper missed ${left.length} comment(s), so they would reach the browser`);
   });
@@ -118,11 +137,12 @@ for (const file of FILES) {
 test("the stripper only removes comments", () => {
   for (const file of FILES) {
     const src = read(file);
-    const code = (s) => stripComments(s).split(/\s+/).join(" ").trim();
+    const opts = { mode: modeOf(file) };
+    const code = (s) => stripComments(s, opts).split(/\s+/).join(" ").trim();
     // Stripping an already stripped file must be a no-op, and must not disturb
     // the code: a tokenizer bug would show up here as a changed body.
-    assert.equal(code(stripComments(src)), code(src), `${file}: stripping is not idempotent`);
-    assert.ok(!stripComments(src).includes("<!--"), `${file}: an HTML comment survived`);
+    assert.equal(code(stripComments(src, opts)), code(src), `${file}: stripping is not idempotent`);
+    assert.ok(!stripComments(src, opts).includes("<!--"), `${file}: an HTML comment survived`);
   }
 });
 

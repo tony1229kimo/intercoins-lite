@@ -1,15 +1,17 @@
 /**
- * 每人實體獎上限（MAX_PHYSICAL_WINS）—— **開啟時**的行為。
+ * Per-person physical-prize limit (MAX_PHYSICAL_WINS): behaviour when it is ON.
  *
- * 2026-09-02 起預設是 0（不限），所以這裡明示設 2 來測。
- * 功能保留是因為它隨時可能要再開（例如又出現退幣循環或獎品被掃貨）。
+ * The default has been 0, meaning no limit, since 2026-09-02, so this file turns
+ * it on explicitly. The mechanism is kept because it may be needed again -- a
+ * refund loop reappearing, or prizes being swept.
  *
- * 開啟後有兩個都很貴的失敗方向，兩邊都要測：
- *   擋太少 → 一個人抱走一堆實體獎
- *   擋太多 → 客人一進來就被鎖住不能玩（比不擋還糟）
+ * When it is on, both directions of failure are expensive, so both are tested:
+ *   blocking too little  one person walks off with a pile of physical prizes
+ *   blocking too much    guests are locked out on arrival, which is worse than
+ *                        not having the limit at all
  */
-// 上限預設已改為 0（不限），所以這個檔案要【明示開啟】才測得到擋人的行為。
-// env 一定要在 startApp() 之前設好 —— 那個常數是 module load 時讀的。
+// The default is now no limit, so this file has to turn the limit ON to see any blocking at all.
+// The environment has to be set before startApp(): the constant is read at module load.
 process.env.MAX_PHYSICAL_WINS = "2";
 
 import { test, before, after } from "node:test";
@@ -70,7 +72,7 @@ test("待聯繫類（contact）的獎也計入上限，且推播要帶對飯店"
   assert.equal(DB.pushes[0].prizeHotel, "TPE",
     "prizeHotel 沒帶到的話，客人收到的 LINE 訊息會寫「本酒店」而不是館別名");
 
-  DB.draws.push({ coin_reward: 0 });          // 湊到上限
+  DB.draws.push({ coin_reward: 0 });          // reach the limit
   const blocked = await app.post("/api/spin", { tier: 1 });
   assert.equal(blocked.json.capReached, true, "住宿大獎也要算進上限");
 });

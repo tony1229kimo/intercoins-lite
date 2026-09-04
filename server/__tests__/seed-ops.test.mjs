@@ -1,14 +1,16 @@
 /**
- * seedPrizes 不可以無條件覆蓋營運欄位。
+ * seedPrizes must not overwrite the operational columns unconditionally.
  *
- * 2026-09-02 事故：seedPrizes() 每次容器啟動都跑，而 ON CONFLICT 會把
- * quota 與 weight 蓋回 prizes.json 的值。結果當天在後台把洲遊幣機率調成 0%、
- * 補回 44 個名額，20 分鐘後一次部署就全部消失，而且完全沒有任何提示。
+ * 2026-09-02 incident: seedPrizes() runs on every container start, and its
+ * ON CONFLICT clause wrote quota and weight back to the values in prizes.json.
+ * Settings adjusted in the admin panel that day were gone twenty minutes later,
+ * taken out by a single deploy, with no warning at all.
  *
- * 規則：
- *   目錄欄位（名稱／連結／等級／領獎方式）→ 每次以 prizes.json 為準
- *   營運欄位（quota / weight / visible / active）→ 只在 INSERT 時設，之後由後台管理
- *   要覆蓋 → 設 PRIZES_RESEED_OPS=1（明示的逃生門）
+ * The rule:
+ *   catalogue (name, link, tier, claim mode) follows prizes.json every time
+ *   operational (quota, weight, visible, active) is set on INSERT only, and
+ *   managed from the admin panel afterwards
+ *   to overwrite deliberately, set PRIZES_RESEED_OPS=1 -- an explicit escape hatch
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -17,7 +19,7 @@ import path from "node:path";
 
 const SRC = readFileSync(path.join(import.meta.dirname, "..", "prizes.js"), "utf8");
 
-// ON CONFLICT ... DO UPDATE 的那一段
+// the ON CONFLICT ... DO UPDATE clause
 const conflict = SRC.slice(
   SRC.indexOf("ON CONFLICT (id) DO UPDATE"),
   SRC.indexOf("updated_at      = now()"),

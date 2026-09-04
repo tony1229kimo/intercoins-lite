@@ -1,15 +1,17 @@
 /**
- * Flex Message 屬性防呆。
+ * Guard against properties LINE Flex does not have.
  *
- * 2026-09-02 的教訓：`letterSpacing` 不是 LINE Flex 的屬性（只有 lineSpacing），
- * 帶了整則訊息會被退 HTTP 400 —— 而且是**每一則都退**。
- * 結果從上線到發現為止，76 筆中獎推播成功 0 筆，沒有任何一位客人收到券。
+ * The lesson from 2026-09-02: letterSpacing is not a Flex property -- only
+ * lineSpacing is -- and including it has the whole message rejected with a 400.
+ * Every message, every time. Between going live and the cause being found, all 76
+ * winner pushes failed and not one guest received a voucher.
  *
- * 這種錯不會在本機噴出來（我們沒有 LINE token 可以打），所以改用原始碼掃描：
- * 只要 line.js 裡出現「看起來像 CSS、但 LINE 沒有」的屬性名就讓測試失敗。
+ * This kind of mistake cannot surface locally, because there is no token here to
+ * call LINE with. So it is caught by scanning the source instead: a property name
+ * that looks like CSS but does not exist in Flex fails the test.
  *
- * ⚠️ 這是 lint 等級的防呆，不是完整的 schema 驗證。
- *    真正的驗證要打 LINE 的 POST /v2/bot/message/validate/push（不發送、只驗格式）。
+ * This is a lint, not schema validation. Real validation means calling LINE's
+ * POST /v2/bot/message/validate/push, which checks the shape without sending.
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +23,7 @@ const SRC = readFileSync(
   "utf8",
 );
 
-/** 這些是 CSS 有、但 LINE Flex 沒有的屬性 —— 寫下去就是整則 400。 */
+/** Properties CSS has and LINE Flex does not. Writing one is a 400 for the whole message. */
 const NOT_LINE_FLEX = {
   letterSpacing: "LINE 只有 lineSpacing（行距），沒有字距",
   fontSize: "用 size（xs/sm/md/lg/xl/xxl/3xl…）",
@@ -37,7 +39,7 @@ const NOT_LINE_FLEX = {
 
 for (const [prop, hint] of Object.entries(NOT_LINE_FLEX)) {
   test(`Flex 不可以用 ${prop}`, () => {
-    // 只抓當成物件 key 用的（prop: ...），註解裡提到不算
+    // only where it is used as an object key (prop: ...); a mention in a comment does not count
     const asKey = new RegExp(`(^|[{,\\s])${prop}\\s*:`, "m");
     const lines = SRC.split("\n")
       .map((l, i) => [i + 1, l])
