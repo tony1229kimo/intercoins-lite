@@ -330,6 +330,38 @@ router.get("/contacts", async (req, res) => {
   });
 });
 
+/**
+ * Reopen a claim that was already marked used, then push it again.
+ *
+ * Needed because 2026-09-04 showed a claim could be marked used without the
+ * guest ever receiving anything -- the link was a GET that spent the token, so
+ * a preview or a scanner touching it was enough. Collecting is a POST now, but
+ * rows burned before that change stay burned, and repush refuses them.
+ *
+ * This is not a routine action: reopening lets a second voucher be issued, so
+ * if the first one really did arrive the guest ends up with two. Use it only
+ * after checking with the guest, and it is written to the access log.
+ */
+router.post("/draws/:id/reopen", async (req, res) => {
+  const { rows } = await query(
+    `SELECT d.*, pr.spend_threshold, pr.expiry_note
+       FROM draws d JOIN prizes pr ON pr.id = d.prize_id
+      WHERE d.id = $1`, [req.params.id]);
+  if (!rows.length) return res.status(404).json({ error: "not_found" });
+  const draw = rows[0];
+  if (!draw.claim_token) return res.status(400).json({ error: "no_claim_token" });
+
+  await query("UPDATE draws SET claim_used_at = NULL WHERE id = $1", [draw.id]);
+  await logAccess(req.adminUser, `reopen:${draw.id}:${draw.prize_id}`, req).catch(() => {});
+
+  const r = await pushRewardCoupon(draw.hotel, draw.line_user_id,
+    { ...draw, claim_used_at: null, tier_label: TIER_LABEL[draw.tier] });
+  await query("UPDATE draws SET pushed = $2, push_error = $3 WHERE id = $1",
+    [draw.id, r.ok, r.ok ? null : r.reason]);
+
+  res.json(r.ok ? { ok: true } : { ok: false, reason: r.reason });
+});
+
 /** Re-send: push a win again after the first attempt failed. */
 router.post("/draws/:id/repush", async (req, res) => {
   const { rows } = await query(

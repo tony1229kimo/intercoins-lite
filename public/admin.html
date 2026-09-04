@@ -40,6 +40,9 @@ header h1{font-family:var(--serif);font-size:21px;letter-spacing:1px}
 header .env{font-size:11px;color:var(--muted)}
 header .spacer{flex:1}
 #logout{background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline}
+.mini{border:1px solid var(--line);background:#fff;border-radius:5px;padding:2px 7px;font-size:11px;color:var(--gold);cursor:pointer;white-space:nowrap}
+.mini:active{transform:scale(.97)}
+.mini[disabled]{opacity:.5;cursor:default}
 
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:16px 0 20px}
 .stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
@@ -410,6 +413,10 @@ function renderWinners(){
       else if(r.claimedAt) status = '<span class="pill ok">券已領取</span>';
       else if(!r.pushed) status = '<span class="pill no">推播失敗</span>';
       else status = '<span class="pill zero">券未領取</span>';
+      // Recovery for a voucher the guest never actually received.
+      if(!r.coin && r.claimMode !== 'contact' && (r.claimedAt || !r.pushed)){
+        status += ` <button class="mini" data-reopen="${r.id}" data-prize="${esc(r.prize)}">重發</button>`;
+      }
       return `<tr>
         <td class="mono">${fmt(r.at)}</td>
         <td><span class="pill ${r.hotel === 'KH' ? 'kh' : 'tpe'}">${r.hotel === 'KH' ? '高雄' : '臺北'}</span></td>
@@ -424,6 +431,31 @@ function renderWinners(){
       </tr>`;
     }).join('') : '<tr><td colspan="10"><div class="empty">目前沒有符合條件的資料</div></td></tr>';
   };
+  // Reopening lets a second voucher go out, so it asks first and says so plainly.
+  $('#tb').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-reopen]');
+    if(!btn) return;
+    const id = btn.dataset.reopen;
+    if(!confirm(`重新發送「${btn.dataset.prize}」給這位客人？
+
+`
+      + `系統會把這筆的領取狀態清掉並重新推播一次。
+`
+      + `如果客人其實已經收到券，這樣會變成兩張 —— 請先向客人確認過再按。`)) return;
+    btn.disabled = true; btn.textContent = '處理中…';
+    try{
+      const r = await fetch('/api/admin/draws/' + id + '/reopen',
+        { method:'POST', headers:{ Authorization:'Bearer ' + TOKEN } });
+      const d = await r.json().catch(() => ({}));
+      if(!r.ok || !d.ok) throw new Error(d.reason || d.error || ('HTTP ' + r.status));
+      alert('已重新發送，請客人到 LINE 聊天室查看。');
+      load();
+    }catch(err){
+      alert('重發失敗：' + err.message);
+      btn.disabled = false; btn.textContent = '重發';
+    }
+  });
+
   ['q','h','k'].forEach(id => $('#'+id).addEventListener(id === 'q' ? 'input' : 'change', draw));
   $('#csv').addEventListener('click', downloadCsv);
   draw();
