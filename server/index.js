@@ -8,7 +8,7 @@
  */
 import express from "express";
 import { existsSync, readFileSync } from "node:fs";
-import { timingSafeEqual } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, extname, join, normalize, sep } from "node:path";
 
@@ -25,6 +25,37 @@ import adminRoutes from "./routes/admin.js";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(HERE, "..", "public");
 const PORT = Number(process.env.PORT) || 8080;
+
+/**
+ * A fingerprint of what this container is actually serving.
+ *
+ * Deploys here are hard to observe from outside: the platform sends no version
+ * header, and a change confined to the admin page or the server leaves nothing
+ * visible on the public URL. Checking "did my push go live?" turned into
+ * guesswork more than once, and guessing wrong in both directions -- believing
+ * a deploy had landed when it had not, and the reverse.
+ *
+ * So the health check reports when this process started and a hash of the
+ * files it serves. Compare the hash with the same files in git and the question
+ * is answered outright.
+ */
+const BOOT_AT = new Date().toISOString();
+
+function buildId() {
+  try {
+    const h = createHash("sha256");
+    for (const f of ["index.html", "admin.html", "admin-login.html"]) {
+      h.update(readFileSync(join(PUBLIC_DIR, f)));
+    }
+    h.update(readFileSync(join(HERE, "routes", "claim.js")));
+    h.update(readFileSync(join(HERE, "routes", "admin.js")));
+    return h.digest("hex").slice(0, 12);
+  } catch {
+    return "unknown";
+  }
+}
+
+const BUILD = buildId();
 
 const app = express();
 app.disable("x-powered-by");
@@ -59,6 +90,9 @@ app.get("/api/health", async (req, res) => {
     // and not redeploying is the most common way a change appears live but is not.
     admin_users_configured: adminUsers().length,
     public_base_url: process.env.PUBLIC_BASE_URL || null,
+    // Which code is running, and since when. See buildId() above.
+    build: BUILD,
+    started_at: BOOT_AT,
     time: new Date().toISOString(),
   };
 

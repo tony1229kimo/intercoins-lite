@@ -12,7 +12,8 @@
     "dev": "node --watch server/index.js",
     "migrate": "node server/migrate.js",
     "optimize:assets": "node scripts/optimize-assets.js",
-    "test": "node --experimental-test-module-mocks --test \"server/__tests__/*.test.mjs\""
+    "test": "node --experimental-test-module-mocks --test \"server/__tests__/*.test.mjs\"",
+    "buildid": "node scripts/build-id.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",
