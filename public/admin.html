@@ -468,7 +468,7 @@ function renderPrizes(){
     <div class="toolbar" style="margin-top:14px"><b>${esc(t.label)}</b>
       <span class="count">${t.open ? '開放中' : '已全數發完 → 抽到會顯示銘謝惠顧'}</span></div>
     <div class="tablewrap"><table>
-      <thead><tr><th>館別</th><th>獎品</th><th>領獎方式</th><th>機率</th><th>名額</th><th>已發出</th><th>剩餘</th></tr></thead>
+      <thead><tr><th>館別</th><th>獎品</th><th>領獎方式</th><th>機率</th><th>名額</th><th>已發出</th><th>剩餘</th><th>重發</th></tr></thead>
       <tbody>${t.prizes.map(p => {
         const pct = p.quota ? Math.min(100, p.issued / p.quota * 100) : 0;
         const out = p.quota && p.issued >= p.quota;
@@ -481,10 +481,13 @@ function renderPrizes(){
           <td>${p.quota || '不限'}</td>
           <td>${p.issued}<div class="bar"><i style="width:${pct}%"></i></div></td>
           <td>${p.remaining === null ? '—' : out ? '<span class="pill no">已發完</span>' : p.remaining}</td>
+          <td>${p.reopened ? `<span class="pill no">+${p.reopened}</span>` : '—'}</td>
         </tr>`;
       }).join('')}</tbody>
     </table></div>`).join('') +
-    `<div class="hint">機率是同一等級內跨館一起分配到 100%。要調整機率或名額，
+    `<div class="hint"><b>重發</b>欄是後台補發過的張數。「已發出」算的是抽中次數，
+      每補發一次，實際發出去的券就比它多一張 —— 這一欄就是那個差額。<br>
+      機率是同一等級內跨館一起分配到 100%。要調整機率或名額，
       可直接改 <span class="mono">scripts/import-prizes.py</span> 後重新部署，
       或呼叫 <span class="mono">PATCH /api/admin/prizes/:id</span>（改完立即生效，不用重新部署）。</div>`;
 }

@@ -60,6 +60,30 @@ router.get("/prizes", async (_req, res) => {
             coupon_link IS NOT NULL AS has_link
        FROM prizes ORDER BY tier, position`,
   );
+  /*
+   * How many vouchers were re-sent for each prize.
+   *
+   * issued counts draws, not vouchers. Re-sending hands out another voucher
+   * without touching issued, so after a re-send the two stop agreeing -- and
+   * the provider's link is stateless, so nothing on their side caps it either.
+   * This column is what makes that gap visible instead of buried in the log.
+   */
+  // This is a footnote on the page, not the point of it. If the count cannot be
+  // read the stock table still has to load, so a failure here degrades to zero
+  // rather than taking the whole tab down.
+  let reopenBy = {};
+  try {
+    const { rows: reopens } = await query(
+      `SELECT split_part(action, ':', 3) AS prize_id, count(*)::int AS n
+         FROM admin_access_log
+        WHERE action LIKE 'reopen:%'
+        GROUP BY 1`,
+    );
+    reopenBy = Object.fromEntries(reopens.map((r) => [r.prize_id, r.n]));
+  } catch (err) {
+    console.error("[admin] 重發次數查詢失敗，該欄以 0 呈現:", err.message);
+  }
+
   const byTier = {};
   for (const r of rows) {
     (byTier[r.tier] ??= []).push(r);
@@ -84,6 +108,7 @@ router.get("/prizes", async (_req, res) => {
         weight: Number(p.weight),
         pct: live.includes(p) ? +Number(p.weight).toFixed(2) : 0,
         remaining: p.quota === 0 ? null : p.quota - p.issued,
+        reopened: reopenBy[p.id] ?? 0,
       })),
     };
   });
