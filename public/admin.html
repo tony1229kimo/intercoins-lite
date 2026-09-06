@@ -40,6 +40,7 @@ header h1{font-family:var(--serif);font-size:21px;letter-spacing:1px}
 header .env{font-size:11px;color:var(--muted)}
 header .spacer{flex:1}
 #logout{background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline}
+.sub{font-size:10.5px;color:var(--muted);margin-top:3px;white-space:nowrap}
 .mini{border:1px solid var(--line);background:#fff;border-radius:5px;padding:2px 7px;font-size:11px;color:var(--gold);cursor:pointer;white-space:nowrap}
 .mini:active{transform:scale(.97)}
 .mini[disabled]{opacity:.5;cursor:default}
@@ -126,6 +127,8 @@ let TAB = 'contacts';
 let CACHE = {};
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtDur = (n) => n < 60 ? n + ' 秒' : n < 3600 ? Math.round(n/60) + ' 分'
+  : n < 86400 ? Math.round(n/3600) + ' 小時' : Math.round(n/86400) + ' 天';
 const fmt = t => t ? new Date(t).toLocaleString('zh-TW',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
 
 async function api(path){
@@ -330,6 +333,17 @@ function renderContacts(){
       這些獎項不發 Omnichat 券，改由專人聯繫。<br>
       <b>「未填」代表中獎者關掉表單還沒補</b> —— 他下次進遊戲時系統會自動再問一次，不需要人工催。</div>`;
 
+  /*
+   * A claim marked used within seconds of the win was almost certainly not the
+   * guest: reading a LINE message and tapping takes longer than that. Until
+   * 2026-09-05 the claim URL was spent by a GET, so a preview or a scanner
+   * touching it was enough -- and no voucher ever reached the guest. Those are
+   * the rows to re-send.
+   */
+  const GHOST_SECS = 30;
+  const suspect = (r) => !r.coin && r.claimMode !== 'contact'
+    && r.claimedAt && typeof r.claimSecs === 'number' && r.claimSecs < GHOST_SECS;
+
   const draw = () => {
     const q = $('#q').value.trim().toLowerCase();
     const f = $('#f').value, h = $('#h').value;
@@ -373,7 +387,7 @@ function renderWinners(){
     <div class="toolbar">
       <input id="q" placeholder="搜尋姓名 / 手機 / Email / 獎品 / 兌換碼 / LINE 名稱" />
       <select id="h"><option value="">兩館全部</option><option value="KH">只看高雄洲際</option><option value="TPE">只看臺北洲際</option></select>
-      <select id="k"><option value="">所有獎項</option><option value="real">只看實體獎</option><option value="coin">只看洲遊幣</option><option value="unclaimed">實體獎・尚未領取</option></select>
+      <select id="k"><option value="">所有獎項</option><option value="real">只看實體獎</option><option value="coin">只看洲遊幣</option><option value="unclaimed">實體獎・尚未領取</option><option value="ghost">⚠ 疑似沒真的領到</option></select>
       <button id="csv">下載 CSV</button>
       <span class="count" id="cnt"></span>
     </div>
@@ -399,6 +413,7 @@ function renderWinners(){
         if(r.coin) return false;
         if(r.claimMode === 'contact' ? r.contactFilled : r.claimedAt) return false;
       }
+      if(k === 'ghost' && !suspect(r)) return false;
       if(!q) return true;
       return [r.name, r.phone, r.email, r.prize, r.code, r.lineName]
         .some(v => String(v ?? '').toLowerCase().includes(q));
@@ -410,7 +425,9 @@ function renderWinners(){
       else if(r.claimMode === 'contact')
         status = r.contactFilled ? '<span class="pill ok">已留聯絡資訊</span>'
                                  : '<span class="pill no">待客人填寫</span>';
-      else if(r.claimedAt) status = '<span class="pill ok">券已領取</span>';
+      else if(r.claimedAt) status = suspect(r)
+        ? `<span class="pill no">疑似沒真的領到</span><div class="sub">領取只花 ${r.claimSecs} 秒</div>`
+        : `<span class="pill ok">券已領取</span>${typeof r.claimSecs === 'number' ? `<div class="sub">${fmtDur(r.claimSecs)}後領取</div>` : ''}`;
       else if(!r.pushed) status = '<span class="pill no">推播失敗</span>';
       else status = '<span class="pill zero">券未領取</span>';
       // Recovery for a voucher the guest never actually received.

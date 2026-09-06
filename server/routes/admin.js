@@ -253,6 +253,12 @@ async function fetchWinners() {
   const { rows } = await query(
     `SELECT d.id, d.created_at, d.hotel, d.tier, d.prize_name, d.code, d.coin_reward,
             d.pushed, d.push_error, d.claim_used_at,
+            -- Seconds between winning and the claim being spent. A person needs
+            -- time to read the message and tap; a prefetch or scanner does not.
+            -- Before 2026-09-05 the claim URL was spent by a GET, so anything
+            -- consumed within a few seconds was almost certainly not the guest,
+            -- and no voucher ever reached them.
+            EXTRACT(EPOCH FROM (d.claim_used_at - d.created_at))::int AS claim_secs,
             pl.display_name, d.line_user_id,
             pz.claim_mode,
             c.name AS contact_name, c.phone AS contact_phone,
@@ -295,6 +301,7 @@ router.get("/winners", async (req, res) => {
       pushed: r.pushed,
       pushError: r.push_error,
       claimedAt: r.claim_used_at,
+      claimSecs: r.claim_secs,
     })),
   });
 });
