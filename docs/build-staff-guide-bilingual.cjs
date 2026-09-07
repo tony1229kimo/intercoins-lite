@@ -431,10 +431,10 @@ function qa(s, { y, zh, en, azh, aen, h = 1.06 }) {
   // 那份的核心「只有兌換碼怎麼分兩種人」已經是第五章，只差這三個問答。
   const s = slide("七、常見問題與標準回答（4/4）", "FAQ & Suggested Replies (4 of 4)");
   qa(s, { y: 1.22, h: 1.24,
-    zh: "為什麼一等獎、二等獎抽到的都是餐飲 85 折？",
-    en: "Why do the First and Second Prize tiers only give the dining discount?",
-    azh: "這兩個等級的獎品已經全部送完，目前抽到的是保底的餐飲 85 折。三等獎還有其他獎品，建議您改抽三等獎。",
-    aen: "All prizes in those two tiers have been claimed, so the guaranteed 15% dining discount is awarded instead. The Third Prize tier still has other prizes available." });
+    zh: "為什麼三個等級抽到的都是餐飲 85 折？",
+    en: "Why does every tier give the same dining discount?",
+    azh: "各項獎品都有名額限制，目前多數已經送完，所以抽到的是保底的餐飲 85 折優惠禮遇。這張券在館內餐廳都可以使用。",
+    aen: "Every prize has a limited allocation and most have now been claimed, so the guaranteed 15% dining discount is awarded instead. The voucher can be used at our restaurants." });
   qa(s, { y: 2.56, h: 1.16,
     zh: "為什麼現在抽不到「洲遊幣」了？", en: "Why can't I win InterCoins from the wheel any more?",
     azh: "洲遊幣目前只能透過完成任務取得，轉盤上不再發放。",
