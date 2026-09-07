@@ -1728,7 +1728,7 @@ $('#reset-btn').addEventListener('click',()=>{
 /* ---------- winner ticker ---------- */
 
 // Shown when there is nothing to announce yet. Carries no personal names.
-const PROMO_MSGS=['🎡 中秋抽洲際好禮，快來蒐集洲遊幣','🪙 追蹤洲際社群、完成任務，天天累積洲遊幣','🌕 投幣轉盤，抽住宿・餐飲・月餅禮盒'];
+const PROMO_MSGS=['🎡 中秋抽洲際好禮，快來蒐集洲遊幣','🪙 追蹤洲際社群、完成任務，天天累積洲遊幣','🌕 每抽必中，最少可獲高雄洲際酒店餐飲 85 折優惠禮遇'];
 function fetchWinners(){
   const local=(S.won||[]).slice(0,3).filter(w=>!/銘謝惠顧|再接再厲/.test(w.prize))
     .map(w=>({name:'幸運玩家',prize:w.prize}));
