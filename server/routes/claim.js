@@ -1,28 +1,34 @@
 /**
- * Collecting a prize: GET shows the page, POST spends the token.
+ * Collecting a prize.
  *
- * Why this layer exists at all: the voucher provider's bind URL is completely
- * stateless and does not deduplicate per user. One tap issues one voucher, so
- * N taps issue N vouchers -- and a LINE Flex message stays in the chat history
- * forever, so a guest could simply keep tapping. That behaviour is not ours to
- * change, so it is wrapped here and each win gets a single-use token.
+ * Why this layer exists: each win gets a single-use token so a Flex message,
+ * which stays in the chat history forever, cannot be tapped repeatedly.
  *
- * Why it is now two steps (2026-09-04): the single-use token used to be spent
- * by the GET itself. Anything that merely *touches* the URL would burn it --
- * a link preview, a security scanner, a browser prefetch, antivirus -- and the
- * guest, tapping for the first time, would be told the link had already been
- * used and never reach the voucher at all. A guest hit exactly that.
+ * How the request is handled has changed twice, and the reasons are worth
+ * keeping because they pull in opposite directions:
  *
- * So: GET only reads and renders. The token is spent by a POST, which nothing
- * issues on its own -- it takes a deliberate tap on the button.
+ *   until 2026-09-05  GET spent the token and redirected. One tap, but anything
+ *                     that merely touched the URL -- a link preview, a scanner,
+ *                     a browser prefetch -- burned it, and the guest was told
+ *                     their link had already been used without ever seeing the
+ *                     voucher.
  *
- * This route has to sit on the same domain as the button in the Flex message:
- * a wrapper URL pointing at a retired or mistyped host 404s. Front end and API
- * are one Express service on one domain here, so getting PUBLIC_BASE_URL right
- * is enough.
+ *   2026-09-05        GET only rendered; a POST from a button spent the token.
+ *                     Nothing automated sends a POST, so the burning stopped --
+ *                     but the extra tap cost roughly 40% of completed claims
+ *                     (measured at matched age: 24.9% -> 13.2% within 6 hours).
+ *
+ *   2026-09-07        One tap again, but the token is not spent when the request
+ *                     is positively identifiable as automated. See
+ *                     lib/automated.js -- it answers "automated" only on
+ *                     evidence, so an unrecognised client is treated as a guest
+ *                     and still gets their voucher.
+ *
+ * The POST route stays as the path for anyone who does land on the page.
  */
 import { asyncRouter } from "../lib/router.js";
 import { query } from "../db.js";
+import { looksAutomated, requestShape } from "../lib/automated.js";
 
 const router = asyncRouter();
 
@@ -73,7 +79,6 @@ function noticePage({ title, body, cta, form }) {
     </form>
     <p class="note">${form.note ?? ""}</p>
     <script>
-      // Guard against a double tap producing two submissions.
       var f = document.querySelector('form');
       f.addEventListener('submit', function(){
         var b = document.getElementById('go');
@@ -92,93 +97,108 @@ const usedPage = () => noticePage({
   cta: { href: LINE_OA_URL, label: "打開 LINE 官方帳號" },
 });
 
+const counterPage = (prizeName) => noticePage({
+  title: "請至櫃檯領取",
+  body: `您的獎品「${esc(prizeName)}」需由現場人員為您處理，<br/>請持本頁面至高雄洲際酒店櫃檯出示。`,
+});
+
+const busyPage = () => noticePage({
+  title: "系統忙碌中",
+  body: "請稍後再點一次這個連結，您的獎品仍然保留。",
+});
+
+/** The page that offers the button, used whenever we do not spend on sight. */
+const offerPage = (token, name, expiry) => noticePage({
+  title: "領取您的獎品",
+  body: `恭喜您抽中<br/><span class="prize">${esc(name)}</span>`,
+  form: {
+    action: `/api/claim/${encodeURIComponent(token)}`,
+    label: "領取優惠券",
+    note: `按下後優惠券會立即發送到您的 LINE 聊天室。<br/>此連結僅能使用一次。${
+      expiry ? `<br/>${esc(expiry)}` : ""}`,
+  },
+});
+
 /**
- * Step one: show what is waiting, and nothing else.
+ * Spend the token and hand the guest over to the voucher.
  *
- * Deliberately read-only. Whatever fetches this -- a preview, a scanner, the
- * guest themselves -- the token is untouched and the voucher is still theirs.
+ * The atomic UPDATE is what guarantees one voucher per win: concurrent taps are
+ * serialised by Postgres and exactly one of them gets the row.
+ */
+async function spendAndRedirect(res, token, redirectStatus) {
+  const { rows } = await query(
+    `UPDATE draws SET claim_used_at = now()
+      WHERE claim_token = $1 AND claim_used_at IS NULL
+      RETURNING prize_id, prize_name`,
+    [token],
+  );
+  if (!rows.length) return res.status(200).send(usedPage());
+
+  const { rows: [prize] } = await query(
+    "SELECT coupon_link FROM prizes WHERE id = $1", [rows[0].prize_id]);
+
+  if (prize?.coupon_link) return res.redirect(redirectStatus, prize.coupon_link);
+
+  // A winning entry with no voucher link: a data gap, so give the guest
+  // something they can take to the front desk.
+  console.error(`[claim] ${rows[0].prize_id} 沒有 coupon_link，無法轉址`);
+  return res.status(200).send(counterPage(rows[0].prize_name));
+}
+
+/**
+ * One tap for a guest; no spending for anything automated.
  */
 router.get("/:token", async (req, res) => {
   const token = String(req.params.token || "");
   if (!token) return res.status(400).send("bad request");
 
-  let rows;
+  let row;
   try {
-    ({ rows } = await query(
+    const { rows } = await query(
       `SELECT d.prize_name, d.claim_used_at, pz.expiry_note
          FROM draws d JOIN prizes pz ON pz.id = d.prize_id
         WHERE d.claim_token = $1`,
       [token],
-    ));
+    );
+    row = rows[0];
   } catch (err) {
-    // A guest holding a winning link must never be shown a raw error. Nothing
-    // has been spent, so asking them to try again is honest advice.
+    // A guest holding a winning link must never be shown a raw error, and
+    // nothing has been spent, so asking them to try again is honest advice.
     console.error("[claim] 查詢失敗:", err);
-    return res.status(500).send(noticePage({
-      title: "系統忙碌中",
-      body: "請稍後再點一次這個連結，您的獎品仍然保留。",
-    }));
+    return res.status(500).send(busyPage());
   }
 
   // An unknown token and a spent one get the same page, so nothing here reveals
   // whether a token is real.
-  if (!rows.length || rows[0].claim_used_at) return res.status(200).send(usedPage());
+  if (!row || row.claim_used_at) return res.status(200).send(usedPage());
 
-  const { prize_name: name, expiry_note: expiry } = rows[0];
-  return res.status(200).send(noticePage({
-    title: "領取您的獎品",
-    body: `恭喜您抽中<br/><span class="prize">${esc(name)}</span>`,
-    form: {
-      action: `/api/claim/${encodeURIComponent(token)}`,
-      label: "領取優惠券",
-      note: `按下後優惠券會立即發送到您的 LINE 聊天室。<br/>此連結僅能使用一次。${
-        expiry ? `<br/>${esc(expiry)}` : ""}`,
-    },
-  }));
+  if (looksAutomated(req)) {
+    // Not a guest: render the offer, spend nothing. If the guess is wrong, the
+    // guest simply taps the button and still gets their voucher.
+    console.log(`[claim] 未消耗（判定為自動請求） ${requestShape(req)}`);
+    return res.status(200).send(offerPage(token, row.prize_name, row.expiry_note));
+  }
+
+  try {
+    console.log(`[claim] 消耗並轉址 ${requestShape(req)}`);
+    return await spendAndRedirect(res, token, 302);
+  } catch (err) {
+    console.error("[claim] 失敗:", err);
+    return res.status(500).send(busyPage());
+  }
 });
 
-/**
- * Step two: spend the token and hand the guest over.
- *
- * The atomic UPDATE is what guarantees one voucher per win: concurrent taps are
- * serialised by Postgres and exactly one of them gets the row.
- */
+/** The button on the offer page. Nothing automated sends a POST. */
 router.post("/:token", async (req, res) => {
   const token = String(req.params.token || "");
   if (!token) return res.status(400).send("bad request");
 
   try {
-    const { rows } = await query(
-      `UPDATE draws SET claim_used_at = now()
-        WHERE claim_token = $1 AND claim_used_at IS NULL
-        RETURNING prize_id, prize_name`,
-      [token],
-    );
-
-    if (!rows.length) return res.status(200).send(usedPage());
-
-    const { rows: [prize] } = await query(
-      "SELECT coupon_link FROM prizes WHERE id = $1", [rows[0].prize_id]);
-
-    // 303 rather than 302: the browser should follow with a GET, so going back
-    // afterwards cannot re-submit the form.
-    if (prize?.coupon_link) return res.redirect(303, prize.coupon_link);
-
-    // A winning entry with no voucher link: a data gap, so give the guest
-    // something they can take to the front desk.
-    console.error(`[claim] ${rows[0].prize_id} 沒有 coupon_link，無法轉址`);
-    return res.status(200).send(noticePage({
-      title: "請至櫃檯領取",
-      body: `您的獎品「${esc(rows[0].prize_name)}」需由現場人員為您處理，<br/>請持本頁面至高雄洲際酒店櫃檯出示。`,
-    }));
+    // 303 so the browser follows with a GET and going back cannot re-submit.
+    return await spendAndRedirect(res, token, 303);
   } catch (err) {
-    // Do not collapse every failure into the same misleading message.
     console.error("[claim] 失敗:", err);
-    return res.status(500).send(noticePage({
-      title: "系統忙碌中",
-      body: `請稍後再點一次這個連結，您的獎品仍然保留。<br/><br/>
-             <span style="font-size:11px;color:#B14A4A">[${esc(String(err.message).slice(0, 120))}]</span>`,
-    }));
+    return res.status(500).send(busyPage());
   }
 });
 
