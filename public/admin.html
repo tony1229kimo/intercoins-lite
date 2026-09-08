@@ -333,17 +333,6 @@ function renderContacts(){
       這些獎項不發 Omnichat 券，改由專人聯繫。<br>
       <b>「未填」代表中獎者關掉表單還沒補</b> —— 他下次進遊戲時系統會自動再問一次，不需要人工催。</div>`;
 
-  /*
-   * A claim marked used within seconds of the win was almost certainly not the
-   * guest: reading a LINE message and tapping takes longer than that. Until
-   * 2026-09-05 the claim URL was spent by a GET, so a preview or a scanner
-   * touching it was enough -- and no voucher ever reached the guest. Those are
-   * the rows to re-send.
-   */
-  const GHOST_SECS = 30;
-  const suspect = (r) => !r.coin && r.claimMode !== 'contact'
-    && r.claimedAt && typeof r.claimSecs === 'number' && r.claimSecs < GHOST_SECS;
-
   const draw = () => {
     const q = $('#q').value.trim().toLowerCase();
     const f = $('#f').value, h = $('#h').value;
@@ -401,6 +390,17 @@ function renderWinners(){
       <b>高雄的獎</b>：券已推到客人 LINE，狀態顯示券有沒有被領走 —— 櫃檯核銷時可對兌換碼。<br>
       <b>臺北的獎</b>：不發券，狀態顯示中獎者有沒有留下聯絡資訊，由臺北洲際的人主動聯繫。
     </div>`;
+
+  /*
+   * A claim marked used within seconds of the win was almost certainly not the
+   * guest: reading a LINE message and tapping takes longer than that. Until
+   * 2026-09-05 the claim URL was spent by a GET, so a preview or a scanner
+   * touching it was enough -- and no voucher ever reached the guest. Those are
+   * the rows to re-send.
+   */
+  const GHOST_SECS = 30;
+  const suspect = (r) => !r.coin && r.claimMode !== 'contact'
+    && r.claimedAt && typeof r.claimSecs === 'number' && r.claimSecs < GHOST_SECS;
 
   const draw = () => {
     const q = $('#q').value.trim().toLowerCase();
